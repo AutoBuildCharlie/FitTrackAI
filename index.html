@@ -1120,7 +1120,10 @@ For FOOD, MEAL, or SNACK (estimate macros — always include this):
 
 IMPORTANT: Always estimate calories and macros even for small snacks. Be concise and motivating.
 
-IMPORTANT: You cannot change Cal's macro goals or app settings. If he asks to change his goals (calories, protein, carbs, fat targets), tell him to tap the gear icon (⚙️) in the top right and update them in Settings. Do not pretend you have changed anything in the app.`;
+If Cal asks to change, update, or set his daily macro goals (calories, protein, carbs, fat targets), respond with:
+{"message": "short confirmation of the new goals", "log": {"type": "goals", "calories": 1800, "protein": 140, "carbs": 180, "fat": 60}}
+
+Only include fields that are being changed. For any field not mentioned, use the word null so it stays unchanged. Be flexible — if he says "increase protein to 160" just update protein.`;
 
 async function askClaude(userMessage) {
     history.push({ role: 'user', content: userMessage });
@@ -1175,7 +1178,17 @@ async function askClaude(userMessage) {
 
         if (displayText) addBubble('ai', displayText);
 
-        if (logData?.type === 'workout') {
+        if (logData?.type === 'goals') {
+            const current = loadGoals();
+            const updated = {
+                calories: logData.calories ?? current.calories,
+                protein:  logData.protein  ?? current.protein,
+                carbs:    logData.carbs    ?? current.carbs,
+                fat:      logData.fat      ?? current.fat
+            };
+            localStorage.setItem('fittrack_goals', JSON.stringify(updated));
+            renderMacroBar();
+        } else if (logData?.type === 'workout') {
             addWorkoutCard(logData);
             todayLog.workouts.push({
                 summary:      logData.summary,
