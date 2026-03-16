@@ -762,6 +762,26 @@
         </div>
         <label class="field-label">Groq API Key</label>
         <input type="password" class="field-input" id="apiKeyInput" placeholder="gsk_...">
+
+        <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">Daily Goals</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+            <div>
+                <label class="field-label">Calories</label>
+                <input type="number" class="field-input" id="goalCalories" placeholder="2000">
+            </div>
+            <div>
+                <label class="field-label">Protein (g)</label>
+                <input type="number" class="field-input" id="goalProtein" placeholder="150">
+            </div>
+            <div>
+                <label class="field-label">Carbs (g)</label>
+                <input type="number" class="field-input" id="goalCarbs" placeholder="200">
+            </div>
+            <div>
+                <label class="field-label">Fat (g)</label>
+                <input type="number" class="field-input" id="goalFat" placeholder="65">
+            </div>
+        </div>
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
     </div>
 </div>
@@ -907,6 +927,22 @@ function hideTyping() {
 // ─────────────────────────────────────────
 //  SUMMARY PANEL
 // ─────────────────────────────────────────
+function loadGoals() {
+    const raw = localStorage.getItem('fittrack_goals');
+    return raw ? JSON.parse(raw) : { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+}
+
+function saveGoals() {
+    const goals = {
+        calories: parseInt(document.getElementById('goalCalories').value) || 2000,
+        protein:  parseInt(document.getElementById('goalProtein').value)  || 150,
+        carbs:    parseInt(document.getElementById('goalCarbs').value)    || 200,
+        fat:      parseInt(document.getElementById('goalFat').value)      || 65
+    };
+    localStorage.setItem('fittrack_goals', JSON.stringify(goals));
+    return goals;
+}
+
 function renderMacroBar() {
     const tot = todayLog.meals.reduce((a, m) => ({
         calories: a.calories + m.calories,
@@ -920,8 +956,7 @@ function renderMacroBar() {
     document.getElementById('barCarbs').textContent    = tot.carbs + 'g';
     document.getElementById('barFat').textContent      = tot.fat + 'g';
 
-    // Fill bars — goals: 2000 cal, 150g protein, 200g carbs, 65g fat
-    const goals = { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+    const goals = loadGoals();
     document.getElementById('fillCalories').style.width = Math.min(tot.calories / goals.calories * 100, 100) + '%';
     document.getElementById('fillProtein').style.width  = Math.min(tot.protein  / goals.protein  * 100, 100) + '%';
     document.getElementById('fillCarbs').style.width    = Math.min(tot.carbs    / goals.carbs    * 100, 100) + '%';
@@ -1040,6 +1075,11 @@ function resetAllData() {
 // ─────────────────────────────────────────
 function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
+    const g = loadGoals();
+    document.getElementById('goalCalories').value = g.calories;
+    document.getElementById('goalProtein').value  = g.protein;
+    document.getElementById('goalCarbs').value    = g.carbs;
+    document.getElementById('goalFat').value      = g.fat;
     document.getElementById('settingsOverlay').classList.add('open');
 }
 
@@ -1047,6 +1087,8 @@ function saveSettings() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (!key) { alert('Please enter your API key'); return; }
     apiKey = key;
+    saveGoals();
+    renderMacroBar();
     localStorage.setItem('fittrack_groq_key', key);
     document.getElementById('settingsOverlay').classList.remove('open');
     if (!document.getElementById('messages').querySelector('.message')) {
@@ -1073,7 +1115,9 @@ Valid workout types: strength, hypertrophy, cardio, conditioning, HIIT, mobility
 For FOOD, MEAL, or SNACK (estimate macros — always include this):
 {"message": "short reply", "log": {"type": "meal", "foods": ["almonds"], "calories": 161, "protein": 6, "carbs": 6, "fat": 14, "summary": "Handful of almonds"}}
 
-IMPORTANT: Always estimate calories and macros even for small snacks. Be concise and motivating.`;
+IMPORTANT: Always estimate calories and macros even for small snacks. Be concise and motivating.
+
+IMPORTANT: You cannot change Cal's macro goals or app settings. If he asks to change his goals (calories, protein, carbs, fat targets), tell him to tap the gear icon (⚙️) in the top right and update them in Settings. Do not pretend you have changed anything in the app.`;
 
 async function askClaude(userMessage) {
     history.push({ role: 'user', content: userMessage });
