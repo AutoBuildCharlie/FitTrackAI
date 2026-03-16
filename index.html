@@ -756,12 +756,14 @@
 <div class="overlay" id="settingsOverlay">
     <div class="modal">
         <div class="modal-title">⚙️ Settings</div>
-        <div class="modal-sub">
-            Enter your Groq API key — 100% free, no card needed.<br>
-            Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>
+        <div id="apiKeySection">
+            <div class="modal-sub">
+                Enter your Groq API key — 100% free, no card needed.<br>
+                Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>
+            </div>
+            <label class="field-label">Groq API Key</label>
+            <input type="password" class="field-input" id="apiKeyInput" placeholder="gsk_...">
         </div>
-        <label class="field-label">Groq API Key</label>
-        <input type="password" class="field-input" id="apiKeyInput" placeholder="gsk_...">
 
         <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">Daily Goals</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
@@ -1075,6 +1077,7 @@ function resetAllData() {
 // ─────────────────────────────────────────
 function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
+    document.getElementById('apiKeySection').style.display = apiKey ? 'none' : 'block';
     const g = loadGoals();
     document.getElementById('goalCalories').value = g.calories;
     document.getElementById('goalProtein').value  = g.protein;
