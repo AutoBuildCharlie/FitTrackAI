@@ -818,7 +818,23 @@
             <input type="password" class="field-input" id="apiKeyInput" placeholder="gsk_...">
         </div>
 
-        <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">Daily Goals</div>
+        <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">About Me</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+            <div>
+                <label class="field-label">Name</label>
+                <input type="text" class="field-input" id="profileName" placeholder="Cal">
+            </div>
+            <div>
+                <label class="field-label">Age</label>
+                <input type="number" class="field-input" id="profileAge" placeholder="36">
+            </div>
+            <div>
+                <label class="field-label">Weight (lbs)</label>
+                <input type="number" class="field-input" id="profileWeight" placeholder="185">
+            </div>
+        </div>
+
+        <div style="margin-top:4px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">Daily Goals</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
             <div>
                 <label class="field-label">Calories</label>
@@ -1012,10 +1028,46 @@ function renderMacroBar() {
     document.getElementById('barFat').textContent      = tot.fat + 'g';
 
     const goals = loadGoals();
-    document.getElementById('fillCalories').style.width = Math.min(tot.calories / goals.calories * 100, 100) + '%';
+    const pct = tot.calories / goals.calories * 100;
+    document.getElementById('fillCalories').style.width = Math.min(pct, 100) + '%';
     document.getElementById('fillProtein').style.width  = Math.min(tot.protein  / goals.protein  * 100, 100) + '%';
     document.getElementById('fillCarbs').style.width    = Math.min(tot.carbs    / goals.carbs    * 100, 100) + '%';
     document.getElementById('fillFat').style.width      = Math.min(tot.fat      / goals.fat      * 100, 100) + '%';
+
+    checkCalorieMilestone(pct);
+}
+
+let lastMilestonePct = 0;
+
+function checkCalorieMilestone(pct) {
+    const milestones = [
+        { threshold: 100, msgs: [
+            "🎉 You hit your calorie goal! The fridge is now officially off limits.",
+            "💯 Goal reached! Your stomach called — it says it's satisfied.",
+            "🏆 Full day of calories done. You are NOT the plate's problem anymore.",
+        ]},
+        { threshold: 75, msgs: [
+            "👀 75% there! One more meal and you're basically a food champion.",
+            "🔥 Three quarters in — your body is running like a well-fed machine.",
+            "⚠️ 75% of your calories down. Proceed with caution… and maybe a salad.",
+        ]},
+        { threshold: 50, msgs: [
+            "🍽️ Halfway through your calories — the day is just getting started!",
+            "💪 50% done. You're basically two meals away from greatness.",
+            "😏 Halftime! Your stomach is currently winning.",
+        ]},
+    ];
+
+    for (const m of milestones) {
+        if (pct >= m.threshold && lastMilestonePct < m.threshold) {
+            lastMilestonePct = m.threshold;
+            const msg = m.msgs[Math.floor(Math.random() * m.msgs.length)];
+            setTimeout(() => addBubble('ai', msg), 500);
+            break;
+        }
+    }
+
+    if (pct < 50) lastMilestonePct = 0;
 }
 
 function renderSummary() {} // kept for compatibility
@@ -1401,6 +1453,11 @@ document.getElementById('addGrubOverlay').addEventListener('click', e => {
 // ─────────────────────────────────────────
 //  SETTINGS
 // ─────────────────────────────────────────
+function loadProfile() {
+    const raw = localStorage.getItem('fittrack_profile');
+    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '' };
+}
+
 function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
     document.getElementById('apiKeySection').style.display = apiKey ? 'none' : 'block';
@@ -1409,6 +1466,10 @@ function openSettings() {
     document.getElementById('goalProtein').value  = g.protein;
     document.getElementById('goalCarbs').value    = g.carbs;
     document.getElementById('goalFat').value      = g.fat;
+    const p = loadProfile();
+    document.getElementById('profileName').value   = p.name;
+    document.getElementById('profileAge').value    = p.age;
+    document.getElementById('profileWeight').value = p.weight;
     document.getElementById('settingsOverlay').classList.add('open');
 }
 
@@ -1419,6 +1480,11 @@ function saveSettings() {
     saveGoals();
     renderMacroBar();
     localStorage.setItem('fittrack_groq_key', key);
+    localStorage.setItem('fittrack_profile', JSON.stringify({
+        name:   document.getElementById('profileName').value.trim(),
+        age:    document.getElementById('profileAge').value.trim(),
+        weight: document.getElementById('profileWeight').value.trim()
+    }));
     document.getElementById('settingsOverlay').classList.remove('open');
     if (!document.getElementById('messages').querySelector('.message')) {
         addWelcome();
@@ -1446,7 +1512,7 @@ For FOOD, MEAL, or SNACK (estimate macros — always include this, no matter wha
 
 If you don't recognize something as food, make a sarcastic or funny comment about it in the message field — but STILL log it with real estimated macros and use the actual food name as the summary. Never log 0 macros. Never use "Non-existent meal" as the summary. Always use the name the user said.
 
-IMPORTANT: Always estimate calories and macros even for small snacks. Be concise and motivating.
+IMPORTANT: Always estimate calories and macros even for small snacks. Be concise and motivating. Always include a short relevant joke or witty comment about the specific food or workout in your message — keep it fun and personalized. For workouts, joke about the muscles worked or the exercise. For food, joke about the specific food item.
 
 If Cal asks to change, update, or set his daily macro goals (calories, protein, carbs, fat targets), respond with:
 {"message": "short confirmation of the new goals", "log": {"type": "goals", "calories": 1800, "protein": 140, "carbs": 180, "fat": 60}}
@@ -1458,7 +1524,11 @@ If Cal asks to delete, clear, or reset data use:
 - Delete today's workouts: {"message": "Done, workouts cleared.", "log": {"type": "clear", "target": "workouts"}}
 - Delete today's meals: {"message": "Done, meals cleared.", "log": {"type": "clear", "target": "meals"}}
 - Delete the whole week: {"message": "Done, week cleared.", "log": {"type": "clear", "target": "week"}}
-Never pretend to delete data — only use the log action above to actually do it.`;
+Never pretend to delete data — only use the log action above to actually do it.
+
+If Cal asks to update or change his name, age, or weight, respond with:
+{"message": "short confirmation", "log": {"type": "profile", "name": "Cal", "age": 36, "weight": 185}}
+Only include the fields being changed. Leave out any fields not mentioned so they stay unchanged.`;
 
 
 async function askClaude(userMessage) {
@@ -1475,8 +1545,13 @@ async function askClaude(userMessage) {
             ? `\n\nCal's saved foods (use THESE exact macros when he mentions them by name):\n${savedFoods.map(f => `- ${f.name}: ${f.calories} cal, ${f.protein}g protein, ${f.carbs}g carbs, ${f.fat}g fat`).join('\n')}`
             : '';
 
+        const profile = loadProfile();
+        const profileContext = (profile.name || profile.age || profile.weight)
+            ? `\n\nUser profile: Name: ${profile.name || 'unknown'}, Age: ${profile.age || 'unknown'}, Weight: ${profile.weight || 'unknown'} lbs. Address them by name and factor in their age/weight when giving fitness or nutrition advice.`
+            : '';
+
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext },
             ...history.map(m => ({ role: m.role, content: m.content }))
         ];
 
@@ -1553,6 +1628,14 @@ async function askClaude(userMessage) {
                 time:         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
             saveLog();
+        } else if (logData?.type === 'profile') {
+            const current = loadProfile();
+            const updated = {
+                name:   logData.name   ?? current.name,
+                age:    logData.age    ?? current.age,
+                weight: logData.weight ?? current.weight
+            };
+            localStorage.setItem('fittrack_profile', JSON.stringify(updated));
         } else if (logData?.type === 'meal') {
             addMealCard(logData);
             todayLog.meals.push({
