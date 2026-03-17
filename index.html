@@ -837,8 +837,15 @@
                 <input type="number" class="field-input" id="profileWeight" placeholder="185">
             </div>
             <div>
-                <label class="field-label">Height (in)</label>
-                <input type="number" class="field-input" id="profileHeight" placeholder="71">
+                <label class="field-label">Height</label>
+                <div style="display:flex;gap:4px;">
+                    <input type="number" class="field-input" id="profileHeightFt" placeholder="5" style="width:50%;">
+                    <input type="number" class="field-input" id="profileHeightIn" placeholder="11" style="width:50%;">
+                </div>
+                <div style="display:flex;gap:4px;margin-top:3px;">
+                    <span style="font-size:10px;color:var(--text-dim);width:50%;text-align:center;">ft</span>
+                    <span style="font-size:10px;color:var(--text-dim);width:50%;text-align:center;">in</span>
+                </div>
             </div>
         </div>
 
@@ -1027,7 +1034,8 @@ function calcBMR(p) {
     if (!p.weight || !p.age) return null;
     const kg  = parseFloat(p.weight) * 0.453592;
     const age = parseFloat(p.age);
-    const cm  = p.height ? parseFloat(p.height) * 2.54 : 175; // default 5'9"
+    const totalIn = (parseFloat(p.heightFt) || 5) * 12 + (parseFloat(p.heightIn) || 9);
+    const cm = totalIn * 2.54;
     return Math.round(10 * kg + 6.25 * cm - 5 * age + 5);
 }
 
@@ -1540,7 +1548,7 @@ document.getElementById('addGrubOverlay').addEventListener('click', e => {
 // ─────────────────────────────────────────
 function loadProfile() {
     const raw = localStorage.getItem('fittrack_profile');
-    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '', height: '' };
+    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '', heightFt: '', heightIn: '' };
 }
 
 function openSettings() {
@@ -1554,8 +1562,9 @@ function openSettings() {
     const p = loadProfile();
     document.getElementById('profileName').value   = p.name;
     document.getElementById('profileAge').value    = p.age;
-    document.getElementById('profileWeight').value = p.weight;
-    document.getElementById('profileHeight').value = p.height;
+    document.getElementById('profileWeight').value   = p.weight;
+    document.getElementById('profileHeightFt').value = p.heightFt;
+    document.getElementById('profileHeightIn').value = p.heightIn;
     document.getElementById('settingsOverlay').classList.add('open');
 }
 
@@ -1567,10 +1576,11 @@ function saveSettings() {
     renderMacroBar();
     localStorage.setItem('fittrack_groq_key', key);
     localStorage.setItem('fittrack_profile', JSON.stringify({
-        name:   document.getElementById('profileName').value.trim(),
-        age:    document.getElementById('profileAge').value.trim(),
-        weight: document.getElementById('profileWeight').value.trim(),
-        height: document.getElementById('profileHeight').value.trim()
+        name:     document.getElementById('profileName').value.trim(),
+        age:      document.getElementById('profileAge').value.trim(),
+        weight:   document.getElementById('profileWeight').value.trim(),
+        heightFt: document.getElementById('profileHeightFt').value.trim(),
+        heightIn: document.getElementById('profileHeightIn').value.trim()
     }));
     renderProfileDisplay();
     document.getElementById('settingsOverlay').classList.remove('open');
@@ -1641,8 +1651,9 @@ async function askClaude(userMessage) {
 
         const profile = loadProfile();
         const bmr = calcBMR(profile);
+        const heightStr = (profile.heightFt || profile.heightIn) ? `, Height: ${profile.heightFt || 5}'${profile.heightIn || 0}"` : '';
         const profileContext = (profile.name || profile.age || profile.weight)
-            ? `\n\nUser profile: Name: ${profile.name || 'unknown'}, Age: ${profile.age || 'unknown'}, Weight: ${profile.weight || 'unknown'} lbs${profile.height ? ', Height: ' + profile.height + ' inches' : ''}${bmr ? ', BMR: ' + bmr + ' calories/day' : ''}. Address them by name and factor in their age/weight when giving fitness or nutrition advice. When they log a run or cardio, calculate and mention estimated calories burned based on their weight.`
+            ? `\n\nUser profile: Name: ${profile.name || 'unknown'}, Age: ${profile.age || 'unknown'}, Weight: ${profile.weight || 'unknown'} lbs${heightStr}${bmr ? ', BMR: ' + bmr + ' calories/day' : ''}. Address them by name and factor in their age/weight when giving fitness or nutrition advice. When they log a run or cardio, calculate and mention estimated calories burned based on their weight.`
             : '';
 
         // Inject recent workout history so AI can suggest what muscle groups to train
