@@ -823,7 +823,7 @@
         </div>
 
         <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">About Me</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px;">
             <div>
                 <label class="field-label">Name</label>
                 <input type="text" class="field-input" id="profileName" placeholder="Cal">
@@ -836,16 +836,15 @@
                 <label class="field-label">Weight (lbs)</label>
                 <input type="number" class="field-input" id="profileWeight" placeholder="185">
             </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
             <div>
-                <label class="field-label">Height</label>
-                <div style="display:flex;gap:4px;">
-                    <input type="number" class="field-input" id="profileHeightFt" placeholder="5" style="width:50%;">
-                    <input type="number" class="field-input" id="profileHeightIn" placeholder="11" style="width:50%;">
-                </div>
-                <div style="display:flex;gap:4px;margin-top:3px;">
-                    <span style="font-size:10px;color:var(--text-dim);width:50%;text-align:center;">ft</span>
-                    <span style="font-size:10px;color:var(--text-dim);width:50%;text-align:center;">in</span>
-                </div>
+                <label class="field-label">Height — ft</label>
+                <input type="number" class="field-input" id="profileHeightFt" placeholder="5">
+            </div>
+            <div>
+                <label class="field-label">Height — in</label>
+                <input type="number" class="field-input" id="profileHeightIn" placeholder="11">
             </div>
         </div>
 
