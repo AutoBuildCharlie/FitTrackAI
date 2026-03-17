@@ -2142,15 +2142,19 @@ function renderRunningChart() {
 
     if (runningChartInstance) runningChartInstance.destroy();
     runningChartInstance = new Chart(canvas, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: runs.map(r => r.date),
             datasets: [{
                 label: 'Miles',
                 data: runs.map(r => r.distance),
-                backgroundColor: 'rgba(255,107,0,0.7)',
                 borderColor: '#FF6B00',
-                borderWidth: 1
+                backgroundColor: 'rgba(255,107,0,0.1)',
+                tension: 0.3,
+                pointBackgroundColor: '#FF6B00',
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                fill: true
             }]
         },
         options: {
