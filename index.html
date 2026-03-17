@@ -259,11 +259,11 @@
 
         .text-input {
             flex: 1;
-            background: var(--bg3);
-            border: 1px solid var(--border);
+            background: #222222;
+            border: 1.5px solid #444444;
             border-radius: 22px;
             padding: 12px 18px;
-            color: var(--text);
+            color: #ffffff;
             font-size: 15px;
             resize: none;
             outline: none;
@@ -279,7 +279,7 @@
             box-shadow: 0 0 14px var(--orange-glow);
         }
 
-        .text-input::placeholder { color: var(--text-dim); }
+        .text-input::placeholder { color: #888888; }
 
         .mic-btn {
             width: 46px;
@@ -1469,8 +1469,14 @@ async function askClaude(userMessage) {
 
     try {
         // Build messages in OpenAI-compatible format for Groq
+        // Inject saved food library so AI knows Cal's custom foods
+        const savedFoods = loadFoodLibrary();
+        const foodContext = savedFoods.length > 0
+            ? `\n\nCal's saved foods (use THESE exact macros when he mentions them by name):\n${savedFoods.map(f => `- ${f.name}: ${f.calories} cal, ${f.protein}g protein, ${f.carbs}g carbs, ${f.fat}g fat`).join('\n')}`
+            : '';
+
         const messages = [
-            { role: 'system', content: SYSTEM },
+            { role: 'system', content: SYSTEM + foodContext },
             ...history.map(m => ({ role: m.role, content: m.content }))
         ];
 
