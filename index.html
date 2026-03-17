@@ -874,6 +874,42 @@
     </div>
 </div>
 
+<!-- PROGRESS OVERLAY -->
+<div class="overlay" id="progressOverlay">
+    <div class="modal" style="max-width:520px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <div style="font-size:18px;font-weight:800;color:var(--orange);">📈 Progress</div>
+            <button onclick="document.getElementById('progressOverlay').classList.remove('open')" style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;">✕</button>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+            <button onclick="showProgressTab('strength')" id="tabStrength" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--orange);background:var(--orange);color:#fff;font-weight:700;cursor:pointer;">💪 Strength</button>
+            <button onclick="showProgressTab('running')" id="tabRunning" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-weight:700;cursor:pointer;">🏃 Running</button>
+        </div>
+
+        <!-- Strength Tab -->
+        <div id="progressStrength">
+            <div style="margin-bottom:12px;">
+                <label class="field-label">Exercise</label>
+                <select id="exerciseSelect" class="field-input" onchange="renderStrengthChart()" style="width:100%;">
+                    <option value="">— Select an exercise —</option>
+                </select>
+            </div>
+            <canvas id="strengthChart" height="200" style="width:100%;display:none;"></canvas>
+            <div id="strengthEmpty" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:14px;">No strength data yet. Log a workout with sets, reps, and weight.</div>
+            <div id="strengthPRs" style="margin-top:16px;"></div>
+        </div>
+
+        <!-- Running Tab -->
+        <div id="progressRunning" style="display:none;">
+            <canvas id="runningChart" height="200" style="width:100%;display:none;"></canvas>
+            <div id="runningEmpty" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:14px;">No runs logged yet. Tell the AI about your run to get started.</div>
+            <div id="runningStats" style="margin-top:16px;"></div>
+        </div>
+    </div>
+</div>
+
 <script>
 // ─────────────────────────────────────────
 //  STATE
@@ -2203,41 +2239,6 @@ if (!apiKey) {
     addWelcome();
 }
 </script>
-<!-- PROGRESS OVERLAY -->
-<div class="overlay" id="progressOverlay">
-    <div class="modal" style="max-width:520px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 16px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <div style="font-size:18px;font-weight:800;color:var(--orange);">📈 Progress</div>
-            <button onclick="document.getElementById('progressOverlay').classList.remove('open')" style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;">✕</button>
-        </div>
-
-        <!-- Tabs -->
-        <div style="display:flex;gap:8px;margin-bottom:20px;">
-            <button onclick="showProgressTab('strength')" id="tabStrength" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--orange);background:var(--orange);color:#fff;font-weight:700;cursor:pointer;">💪 Strength</button>
-            <button onclick="showProgressTab('running')" id="tabRunning" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-weight:700;cursor:pointer;">🏃 Running</button>
-        </div>
-
-        <!-- Strength Tab -->
-        <div id="progressStrength">
-            <div style="margin-bottom:12px;">
-                <label class="field-label">Exercise</label>
-                <select id="exerciseSelect" class="field-input" onchange="renderStrengthChart()" style="width:100%;">
-                    <option value="">— Select an exercise —</option>
-                </select>
-            </div>
-            <canvas id="strengthChart" height="200" style="width:100%;display:none;"></canvas>
-            <div id="strengthEmpty" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:14px;">No strength data yet. Log a workout with sets, reps, and weight.</div>
-            <div id="strengthPRs" style="margin-top:16px;"></div>
-        </div>
-
-        <!-- Running Tab -->
-        <div id="progressRunning" style="display:none;">
-            <canvas id="runningChart" height="200" style="width:100%;display:none;"></canvas>
-            <div id="runningEmpty" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:14px;">No runs logged yet. Tell the AI about your run to get started.</div>
-            <div id="runningStats" style="margin-top:16px;"></div>
-        </div>
-    </div>
-</div>
 
 </body>
 </html>
