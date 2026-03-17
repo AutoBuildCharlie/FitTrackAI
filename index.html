@@ -1338,7 +1338,7 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
                         role: 'user',
                         content: [
                             { type: 'image_url', image_url: { url: base64 } },
-                            { type: 'text', text: 'Look at this image carefully. Determine what it shows. If it is a nutrition facts label or food product, return: {"type": "nutrition", "name": "product name", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "servings": 1}. If it shows a workout, exercise, gym activity, or running (e.g. a treadmill screen, fitness app screenshot, or person working out), return: {"type": "workout", "description": "brief description of the workout shown"}. For anything else (receipt, text, general photo), return: {"type": "other", "description": "describe what you see"}. Return ONLY valid JSON.' }
+                            { type: 'text', text: 'Look at this image carefully and return ONLY valid JSON. If it is a nutrition facts label or food product, return: {"type": "nutrition", "name": "product name", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "servings": 1}. If it shows a running summary, splits chart, treadmill screen, or any fitness app run data (Strava, Garmin, Apple Watch, Nike Run, etc.) — extract the REAL numbers you can actually read in the image. Return: {"type": "run", "distance": 10.0, "duration": 95, "pace": "9:35", "caloriesBurned": 850, "summary": "10 mile run"}. distance in miles (convert km if needed), duration in total minutes, pace as MM:SS per mile string, caloriesBurned from image if shown or estimate as distance_miles x weight_lbs x 0.63 using 185 lbs default. If it shows a strength/gym workout, return: {"type": "workout", "description": "brief description"}. For anything else return: {"type": "other", "description": "describe what you see"}.' }
                         ]
                     }],
                     response_format: { type: 'json_object' },
@@ -1363,8 +1363,24 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
                 todayLog.meals.push({ ...logData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
                 saveLog();
                 renderMacroBar();
+            } else if (parsed.type === 'run') {
+                const profile = loadProfile();
+                const weightLbs = parseFloat(profile.weight) || 185;
+                const cal = parsed.caloriesBurned || Math.round((parsed.distance || 0) * weightLbs * 0.63);
+                const runData = {
+                    summary:        parsed.summary || `${parsed.distance} mile run`,
+                    distance:       parsed.distance,
+                    duration:       parsed.duration,
+                    pace:           parsed.pace,
+                    caloriesBurned: cal
+                };
+                addBubble('ai', `🏃 Got your run! ${runData.distance} miles in ${runData.duration} min at ${runData.pace}/mi pace. You burned ~${cal} calories. Logged! 🔥`);
+                addRunCard(runData);
+                todayLog.workouts.push({ type: 'run', ...runData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                saveLog();
+                renderStreak();
             } else if (parsed.type === 'workout') {
-                addBubble('ai', `📷 I can see: ${parsed.description}. Tell me more about this workout and I'll log it — sets, reps, weight?`);
+                addBubble('ai', `📷 I can see: ${parsed.description}. Tell me more — sets, reps, weight?`);
             } else {
                 addBubble('ai', `📷 I see: ${parsed.description || 'something interesting'}. Want me to log anything from this?`);
             }
