@@ -660,7 +660,10 @@
 <!-- HEADER -->
 <header class="header">
     <div class="logo">FIT<span>TRACK</span> AI</div>
-    <div id="profileDisplay" style="font-size:13px;color:var(--text-dim);text-align:center;line-height:1.3;"></div>
+    <div style="text-align:center;">
+        <div id="profileDisplay" style="font-size:13px;color:var(--text-dim);line-height:1.4;"></div>
+        <div id="streakDisplay" style="font-size:12px;color:var(--orange);font-weight:700;"></div>
+    </div>
     <div class="header-actions">
         <button class="icon-btn" id="addGrubBtn" title="Add Food">🍽️</button>
         <button class="icon-btn" id="summaryBtn" title="Weekly View">📊</button>
@@ -820,7 +823,7 @@
         </div>
 
         <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">About Me</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
             <div>
                 <label class="field-label">Name</label>
                 <input type="text" class="field-input" id="profileName" placeholder="Cal">
@@ -832,6 +835,10 @@
             <div>
                 <label class="field-label">Weight (lbs)</label>
                 <input type="number" class="field-input" id="profileWeight" placeholder="185">
+            </div>
+            <div>
+                <label class="field-label">Height (in)</label>
+                <input type="number" class="field-input" id="profileHeight" placeholder="71">
             </div>
         </div>
 
@@ -1015,6 +1022,15 @@ function saveGoals() {
     return goals;
 }
 
+function calcBMR(p) {
+    // Mifflin-St Jeor (male): 10×kg + 6.25×cm - 5×age + 5
+    if (!p.weight || !p.age) return null;
+    const kg  = parseFloat(p.weight) * 0.453592;
+    const age = parseFloat(p.age);
+    const cm  = p.height ? parseFloat(p.height) * 2.54 : 175; // default 5'9"
+    return Math.round(10 * kg + 6.25 * cm - 5 * age + 5);
+}
+
 function renderProfileDisplay() {
     const p = loadProfile();
     const el = document.getElementById('profileDisplay');
@@ -1023,7 +1039,64 @@ function renderProfileDisplay() {
     if (p.name)   parts.push(p.name);
     if (p.age)    parts.push(p.age + ' yrs');
     if (p.weight) parts.push(p.weight + ' lbs');
+    const bmr = calcBMR(p);
+    if (bmr)      parts.push('BMR ' + bmr + ' cal');
     el.textContent = parts.join(' · ');
+}
+
+function loadPRs() {
+    const raw = localStorage.getItem('fittrack_prs');
+    return raw ? JSON.parse(raw) : {};
+}
+
+function checkPersonalRecord(logData) {
+    if (!logData.exercises || !logData.weight) return;
+    const prs = loadPRs();
+    const exercise = (logData.exercises[0] || '').toLowerCase();
+    const weight = parseFloat(logData.weight);
+    if (!exercise || !weight) return;
+    const prev = prs[exercise] || 0;
+    if (weight > prev) {
+        prs[exercise] = weight;
+        localStorage.setItem('fittrack_prs', JSON.stringify(prs));
+        const diff = weight - prev;
+        const msg = prev > 0
+            ? `🏆 NEW PR on ${logData.exercises[0]}! ${weight} lbs — that's ${diff} lbs more than your last best. Beast mode activated.`
+            : `🏆 First logged ${logData.exercises[0]} — ${weight} lbs. That's your baseline. Now beat it next time.`;
+        setTimeout(() => addBubble('ai', msg), 800);
+    }
+}
+
+function getStreak() {
+    let streak = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = 'fittrack_' + d.toISOString().split('T')[0];
+        const raw = localStorage.getItem(key);
+        if (!raw) break;
+        const log = JSON.parse(raw);
+        if ((log.workouts && log.workouts.length > 0) || (log.meals && log.meals.length > 0)) {
+            streak++;
+        } else {
+            break;
+        }
+    }
+    return streak;
+}
+
+function renderStreak() {
+    const el = document.getElementById('streakDisplay');
+    if (!el) return;
+    const streak = getStreak();
+    if (streak >= 2) {
+        el.textContent = '🔥 ' + streak + ' day streak!';
+    } else if (streak === 1) {
+        el.textContent = '🔥 1 day streak — keep it going!';
+    } else {
+        el.textContent = '';
+    }
 }
 
 function renderMacroBar() {
@@ -1467,7 +1540,7 @@ document.getElementById('addGrubOverlay').addEventListener('click', e => {
 // ─────────────────────────────────────────
 function loadProfile() {
     const raw = localStorage.getItem('fittrack_profile');
-    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '' };
+    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '', height: '' };
 }
 
 function openSettings() {
@@ -1482,6 +1555,7 @@ function openSettings() {
     document.getElementById('profileName').value   = p.name;
     document.getElementById('profileAge').value    = p.age;
     document.getElementById('profileWeight').value = p.weight;
+    document.getElementById('profileHeight').value = p.height;
     document.getElementById('settingsOverlay').classList.add('open');
 }
 
@@ -1495,7 +1569,8 @@ function saveSettings() {
     localStorage.setItem('fittrack_profile', JSON.stringify({
         name:   document.getElementById('profileName').value.trim(),
         age:    document.getElementById('profileAge').value.trim(),
-        weight: document.getElementById('profileWeight').value.trim()
+        weight: document.getElementById('profileWeight').value.trim(),
+        height: document.getElementById('profileHeight').value.trim()
     }));
     renderProfileDisplay();
     document.getElementById('settingsOverlay').classList.remove('open');
@@ -1514,8 +1589,10 @@ Your response must ALWAYS be a single JSON object with a "message" field (your c
 For CONVERSATION ONLY (no food or workout):
 {"message": "your reply here"}
 
-For a WORKOUT:
-{"message": "short motivating reply", "log": {"type": "workout", "muscleGroups": ["chest", "shoulders"], "workoutTypes": ["strength"], "exercises": ["bench press"], "summary": "Upper body strength"}}
+For a WORKOUT (include "weight" in lbs if mentioned, e.g. bench press at 185 lbs):
+{"message": "short motivating reply", "log": {"type": "workout", "muscleGroups": ["chest", "shoulders"], "workoutTypes": ["strength"], "exercises": ["bench press"], "weight": 185, "summary": "Upper body strength"}}
+
+For a RUN or cardio: estimate calories burned using the formula (MET × weight_kg × duration_hours). Running MET ≈ 9.8. Always mention the estimated calories burned in your message. Example: "Nice 30-min run! You burned roughly 320 calories — that's a solid deficit."
 
 Valid muscle groups: chest, back, shoulders, biceps, triceps, core, abs, quads, hamstrings, glutes, calves, cardiovascular, full body
 Valid workout types: strength, hypertrophy, cardio, conditioning, HIIT, mobility, endurance
@@ -1541,7 +1618,11 @@ Never pretend to delete data — only use the log action above to actually do it
 
 If Cal asks to update or change his name, age, or weight, respond with:
 {"message": "short confirmation", "log": {"type": "profile", "name": "Cal", "age": 36, "weight": 185}}
-Only include the fields being changed. Leave out any fields not mentioned so they stay unchanged.`;
+Only include the fields being changed. Leave out any fields not mentioned so they stay unchanged.
+
+If Cal asks what to eat or what he should have for his next meal, look at his remaining calories and macros from today's context and suggest 2-3 specific foods or meals that would fit. Be practical and specific (e.g. "You have 400 calories and 40g protein left — try 2 eggs and a protein shake, or grilled chicken with rice.").
+
+If Cal asks what he should train today or what workout to do, look at the muscle groups he's already hit this week and suggest what's been neglected. Be specific (e.g. "You hit chest and shoulders yesterday — today's a good day for legs or back. Try squats and Romanian deadlifts.").`;
 
 
 async function askClaude(userMessage) {
@@ -1559,12 +1640,38 @@ async function askClaude(userMessage) {
             : '';
 
         const profile = loadProfile();
+        const bmr = calcBMR(profile);
         const profileContext = (profile.name || profile.age || profile.weight)
-            ? `\n\nUser profile: Name: ${profile.name || 'unknown'}, Age: ${profile.age || 'unknown'}, Weight: ${profile.weight || 'unknown'} lbs. Address them by name and factor in their age/weight when giving fitness or nutrition advice.`
+            ? `\n\nUser profile: Name: ${profile.name || 'unknown'}, Age: ${profile.age || 'unknown'}, Weight: ${profile.weight || 'unknown'} lbs${profile.height ? ', Height: ' + profile.height + ' inches' : ''}${bmr ? ', BMR: ' + bmr + ' calories/day' : ''}. Address them by name and factor in their age/weight when giving fitness or nutrition advice. When they log a run or cardio, calculate and mention estimated calories burned based on their weight.`
             : '';
 
+        // Inject recent workout history so AI can suggest what muscle groups to train
+        const weekDates = getWeekDates ? getWeekDates() : [];
+        const recentMuscles = [];
+        weekDates.forEach(d => {
+            const key = 'fittrack_' + d.toISOString().split('T')[0];
+            const raw = localStorage.getItem(key);
+            if (raw) {
+                const log = JSON.parse(raw);
+                (log.workouts || []).forEach(w => {
+                    if (w.muscleGroups) recentMuscles.push(...w.muscleGroups);
+                });
+            }
+        });
+        const workoutContext = recentMuscles.length > 0
+            ? `\n\nMuscle groups trained this week: ${[...new Set(recentMuscles)].join(', ')}.`
+            : '';
+
+        // Inject today's remaining macros
+        const goals = loadGoals();
+        const todayTotals = todayLog.meals.reduce((a, m) => ({
+            calories: a.calories + m.calories, protein: a.protein + m.protein,
+            carbs: a.carbs + m.carbs, fat: a.fat + m.fat
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        const macroContext = `\n\nToday's remaining macros: ${goals.calories - todayTotals.calories} cal, ${goals.protein - todayTotals.protein}g protein, ${goals.carbs - todayTotals.carbs}g carbs, ${goals.fat - todayTotals.fat}g fat left.`;
+
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext + profileContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext + workoutContext + macroContext },
             ...history.map(m => ({ role: m.role, content: m.content }))
         ];
 
@@ -1641,6 +1748,8 @@ async function askClaude(userMessage) {
                 time:         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
             saveLog();
+            renderStreak();
+            checkPersonalRecord(logData);
         } else if (logData?.type === 'profile') {
             const current = loadProfile();
             const updated = {
@@ -1661,6 +1770,7 @@ async function askClaude(userMessage) {
                 time:     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
             saveLog();
+            renderStreak();
         }
 
     } catch (err) {
@@ -1797,6 +1907,7 @@ initVoice();
 renderSummary();
 renderMacroBar();
 renderProfileDisplay();
+renderStreak();
 if (!apiKey) {
     openSettings();
 } else {
