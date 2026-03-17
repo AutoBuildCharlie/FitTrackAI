@@ -1706,8 +1706,9 @@ For a WORKOUT (include "weight" in lbs if mentioned, e.g. bench press at 185 lbs
 {"message": "short motivating reply", "log": {"type": "workout", "muscleGroups": ["chest", "shoulders"], "workoutTypes": ["strength"], "exercises": ["bench press"], "weight": 185, "summary": "Upper body strength"}}
 
 For a RUN (any mention of running, jogging, miles, km):
-{"message": "short reply with pace and calories burned", "log": {"type": "run", "distance": 3.1, "duration": 28, "pace": "9:02", "caloriesBurned": 310, "summary": "3.1 mile run"}}
-distance is in miles, duration in minutes, pace as "MM:SS" per mile string, caloriesBurned calculated from weight. If they mention km convert to miles. Always calculate caloriesBurned using: distance_miles × weight_lbs × 0.63 (standard running formula). Always mention pace and calories burned in your message.
+{"message": "short reply with calories burned", "log": {"type": "run", "distance": 3.1, "duration": 28, "caloriesBurned": 310, "summary": "3.1 mile run"}}
+distance is in miles, duration in minutes, caloriesBurned calculated from weight. If they mention km convert to miles. Always calculate caloriesBurned using: distance_miles × weight_lbs × 0.63 (standard running formula).
+PACE: Only include "pace" in the log if the user explicitly tells you their pace. If they did not mention pace, do NOT include a pace field — do not estimate or make one up. If pace is missing, you may ask "Do you know your average pace?" but still log the run immediately without waiting for an answer.
 
 For a STRENGTH workout with sets/reps/weight — include these in the log:
 {"message": "short motivating reply", "log": {"type": "workout", "muscleGroups": ["chest"], "workoutTypes": ["strength"], "exercises": ["bench press"], "sets": 3, "reps": 8, "weight": 185, "summary": "Bench press 3x8 at 185 lbs"}}
@@ -2061,8 +2062,13 @@ function getAllLogs() {
 }
 
 function openProgress() {
-    showProgressTab('strength');
-    renderStrengthChart();
+    const hasRuns = (todayLog.workouts || []).some(w => w.type === 'run');
+    if (hasRuns) {
+        showProgressTab('running');
+    } else {
+        showProgressTab('strength');
+        renderStrengthChart();
+    }
 }
 
 function renderStrengthChart() {
