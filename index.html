@@ -660,7 +660,8 @@
 <header class="header">
     <div class="logo">FIT<span>TRACK</span> AI</div>
     <div class="header-actions">
-        <button class="icon-btn" id="summaryBtn" title="Today's Summary">📊</button>
+        <button class="icon-btn" id="addGrubBtn" title="Add Food">🍽️</button>
+        <button class="icon-btn" id="summaryBtn" title="Weekly View">📊</button>
         <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
     </div>
 </header>
@@ -749,6 +750,34 @@
         <button onclick="resetAllData()" style="width:100%;margin-top:20px;padding:14px;background:#1a1a1a;border:1px solid #ff3333;color:#ff3333;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">
             🗑️ Reset All Data
         </button>
+    </div>
+</div>
+
+<!-- ADD GRUB MODAL -->
+<div class="overlay" id="addGrubOverlay">
+    <div class="modal" style="max-width:380px;width:90%;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div class="modal-title" style="margin-bottom:0;">🍽️ Add Grub</div>
+            <button onclick="document.getElementById('addGrubOverlay').classList.remove('open')"
+                style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;line-height:1;">✕</button>
+        </div>
+        <label class="field-label">Name of Food</label>
+        <input type="text" class="field-input" id="grubName" placeholder="e.g. Grilled Chicken" style="margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+            <div>
+                <label class="field-label">Protein (g)</label>
+                <input type="number" class="field-input" id="grubProtein" placeholder="0">
+            </div>
+            <div>
+                <label class="field-label">Carbs (g)</label>
+                <input type="number" class="field-input" id="grubCarbs" placeholder="0">
+            </div>
+            <div>
+                <label class="field-label">Fat (g)</label>
+                <input type="number" class="field-input" id="grubFat" placeholder="0">
+            </div>
+        </div>
+        <button class="modal-btn" onclick="saveGrub()">✅ Done</button>
     </div>
 </div>
 
@@ -1073,6 +1102,40 @@ function resetAllData() {
 }
 
 // ─────────────────────────────────────────
+//  ADD GRUB
+// ─────────────────────────────────────────
+function saveGrub() {
+    const name    = document.getElementById('grubName').value.trim();
+    const protein = parseFloat(document.getElementById('grubProtein').value) || 0;
+    const carbs   = parseFloat(document.getElementById('grubCarbs').value)   || 0;
+    const fat     = parseFloat(document.getElementById('grubFat').value)     || 0;
+
+    if (!name) { alert('Please enter a food name'); return; }
+
+    const calories = Math.round(protein * 4 + carbs * 4 + fat * 9);
+    const logData = { summary: name, calories, protein, carbs, fat };
+
+    addMealCard(logData);
+    todayLog.meals.push({ ...logData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    saveLog();
+
+    // Clear fields and close
+    document.getElementById('grubName').value    = '';
+    document.getElementById('grubProtein').value = '';
+    document.getElementById('grubCarbs').value   = '';
+    document.getElementById('grubFat').value     = '';
+    document.getElementById('addGrubOverlay').classList.remove('open');
+}
+
+document.getElementById('addGrubBtn').addEventListener('click', () => {
+    document.getElementById('addGrubOverlay').classList.add('open');
+});
+
+document.getElementById('addGrubOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// ─────────────────────────────────────────
 //  SETTINGS
 // ─────────────────────────────────────────
 function openSettings() {
@@ -1123,7 +1186,15 @@ IMPORTANT: Always estimate calories and macros even for small snacks. Be concise
 If Cal asks to change, update, or set his daily macro goals (calories, protein, carbs, fat targets), respond with:
 {"message": "short confirmation of the new goals", "log": {"type": "goals", "calories": 1800, "protein": 140, "carbs": 180, "fat": 60}}
 
-Only include fields that are being changed. For any field not mentioned, use the word null so it stays unchanged. Be flexible — if he says "increase protein to 160" just update protein.`;
+Only include fields that are being changed. For any field not mentioned, use the word null so it stays unchanged. Be flexible — if he says "increase protein to 160" just update protein.
+
+If Cal asks to delete, clear, or reset data use:
+- Delete everything / all data: {"message": "Done, all data cleared.", "log": {"type": "clear", "target": "all"}}
+- Delete today's workouts: {"message": "Done, workouts cleared.", "log": {"type": "clear", "target": "workouts"}}
+- Delete today's meals: {"message": "Done, meals cleared.", "log": {"type": "clear", "target": "meals"}}
+- Delete the whole week: {"message": "Done, week cleared.", "log": {"type": "clear", "target": "week"}}
+Never pretend to delete data — only use the log action above to actually do it.`;
+
 
 async function askClaude(userMessage) {
     history.push({ role: 'user', content: userMessage });
@@ -1178,7 +1249,21 @@ async function askClaude(userMessage) {
 
         if (displayText) addBubble('ai', displayText);
 
-        if (logData?.type === 'goals') {
+        if (logData?.type === 'clear') {
+            const target = logData.target || 'all';
+            if (target === 'workouts') {
+                todayLog.workouts = [];
+            } else if (target === 'meals') {
+                todayLog.meals = [];
+            } else if (target === 'week') {
+                getWeekDates().forEach(d => localStorage.removeItem('fittrack_' + d.toISOString().split('T')[0]));
+                todayLog = { workouts: [], meals: [] };
+            } else {
+                todayLog = { workouts: [], meals: [] };
+            }
+            saveLog();
+            renderMacroBar();
+        } else if (logData?.type === 'goals') {
             const current = loadGoals();
             const updated = {
                 calories: logData.calories ?? current.calories,
