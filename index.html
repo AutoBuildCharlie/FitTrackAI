@@ -1321,6 +1321,13 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
     reader.onload = async (evt) => {
         const base64 = evt.target.result; // data:image/jpeg;base64,...
 
+        // Show the photo in chat as a clickable thumbnail
+        const imgDiv = document.createElement('div');
+        imgDiv.className = 'message user';
+        imgDiv.innerHTML = `<a href="${base64}" target="_blank"><img src="${base64}" style="max-width:220px;max-height:220px;border-radius:12px;display:block;cursor:zoom-in;"></a>`;
+        document.getElementById('messages').appendChild(imgDiv);
+        scrollBottom();
+
         addBubble('user', '📷 Analyzing photo...');
         showTyping();
         document.getElementById('sendBtn').disabled = true;
