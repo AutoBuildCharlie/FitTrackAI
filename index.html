@@ -1556,9 +1556,13 @@ function editSavedFood(i) {
 
 function saveEditedFood(i) {
     const foods = loadFoodLibrary();
-    const protein  = parseFloat(document.getElementById(`editP_${i}`).value) || 0;
-    const carbs    = parseFloat(document.getElementById(`editC_${i}`).value) || 0;
-    const fat      = parseFloat(document.getElementById(`editF_${i}`).value) || 0;
+    const pEl = document.getElementById(`editP_${i}`);
+    const cEl = document.getElementById(`editC_${i}`);
+    const fEl = document.getElementById(`editF_${i}`);
+    if (!pEl || !cEl || !fEl) return;
+    const protein  = parseFloat(pEl.value) || 0;
+    const carbs    = parseFloat(cEl.value) || 0;
+    const fat      = parseFloat(fEl.value) || 0;
     const calories = Math.round(protein * 4 + carbs * 4 + fat * 9);
     foods[i] = { ...foods[i], protein, carbs, fat, calories };
     saveFoodLibrary(foods);
@@ -1835,6 +1839,7 @@ async function askClaude(userMessage) {
         } else if (logData?.type === 'workout') {
             addWorkoutCard(logData);
             todayLog.workouts.push({
+                type:         'workout',
                 summary:      logData.summary,
                 muscleGroups: logData.muscleGroups,
                 workoutTypes: logData.workoutTypes,
@@ -1850,9 +1855,11 @@ async function askClaude(userMessage) {
         } else if (logData?.type === 'profile') {
             const current = loadProfile();
             const updated = {
-                name:   logData.name   ?? current.name,
-                age:    logData.age    ?? current.age,
-                weight: logData.weight ?? current.weight
+                name:     logData.name     ?? current.name,
+                age:      logData.age      ?? current.age,
+                weight:   logData.weight   ?? current.weight,
+                heightFt: logData.heightFt ?? current.heightFt,
+                heightIn: logData.heightIn ?? current.heightIn
             };
             localStorage.setItem('fittrack_profile', JSON.stringify(updated));
             renderProfileDisplay();
