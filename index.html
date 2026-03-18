@@ -1860,6 +1860,8 @@ If Cal asks to delete, clear, or reset data use:
 - Delete today's workouts: {"message": "Done, workouts cleared.", "log": {"type": "clear", "target": "workouts"}}
 - Delete today's meals: {"message": "Done, meals cleared.", "log": {"type": "clear", "target": "meals"}}
 - Delete the whole week: {"message": "Done, week cleared.", "log": {"type": "clear", "target": "week"}}
+- Delete a specific run from a specific date: {"message": "Done, removed that run.", "log": {"type": "delete_run", "date": "YYYY-MM-DD"}}
+  Use today's date if the user says "today" or doesn't specify. If a user says "delete my run from Tuesday" figure out the date from context.
 Never pretend to delete data — only use the log action above to actually do it.
 
 If Cal asks to MODIFY, EDIT, SUBTRACT, ADD TO, or ADJUST macros of a meal already logged (e.g. "subtract 20 carbs", "reduce the fat", "change that to 800 calories") — do NOT log a new meal. Update the existing one using:
@@ -1972,7 +1974,21 @@ async function askClaude(userMessage) {
 
         if (displayText) addBubble('ai', displayText);
 
-        if (logData?.type === 'clear') {
+        if (logData?.type === 'delete_run') {
+            const targetDate = logData.date || new Date().toISOString().split('T')[0];
+            if (targetDate === new Date().toISOString().split('T')[0]) {
+                todayLog.workouts = todayLog.workouts.filter(w => w.type !== 'run');
+                saveLog();
+                renderMacroBar();
+            } else {
+                const raw = localStorage.getItem('fittrack_' + targetDate);
+                if (raw) {
+                    const dayLog = JSON.parse(raw);
+                    dayLog.workouts = (dayLog.workouts || []).filter(w => w.type !== 'run');
+                    localStorage.setItem('fittrack_' + targetDate, JSON.stringify(dayLog));
+                }
+            }
+        } else if (logData?.type === 'clear') {
             const target = logData.target || 'all';
             if (target === 'workouts') {
                 todayLog.workouts = [];
