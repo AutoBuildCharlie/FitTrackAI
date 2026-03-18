@@ -2115,11 +2115,10 @@ function openProgress() {
 }
 
 function renderStrengthChart() {
-    const logs    = getAllLogs();
-    const prsDiv  = document.getElementById('strengthPRs');
-    const empty   = document.getElementById('strengthEmpty');
+    const logs   = getAllLogs();
+    const prsDiv = document.getElementById('strengthPRs');
+    const empty  = document.getElementById('strengthEmpty');
 
-    // Build per-exercise data: name -> [{date, weight, reps}]
     const exerciseMap = {};
     logs.forEach(log => {
         (log.workouts || []).forEach(w => {
@@ -2138,46 +2137,81 @@ function renderStrengthChart() {
     });
 
     const exercises = Object.values(exerciseMap);
-    if (exercises.length === 0) {
-        prsDiv.innerHTML = '';
-        empty.style.display = 'block';
-        return;
-    }
-
+    if (exercises.length === 0) { prsDiv.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    let html = '';
-    exercises.forEach(ex => {
+
+    // Build PR list sorted by most recent PR date
+    const prList = exercises.map(ex => {
         const maxWeight = Math.max(...ex.entries.map(e => e.weight));
         const maxReps   = Math.max(...ex.entries.map(e => e.reps));
-        const prEntry   = ex.entries.find(e => e.weight === maxWeight || e.reps === maxReps);
-        const prDates   = [...new Set(
-            ex.entries
-                .filter(e => e.weight === maxWeight || e.reps === maxReps)
-                .map(e => new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
-        )];
-        const weightStr = maxWeight > 0 ? `<div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--orange);">${maxWeight}</div><div style="font-size:11px;color:var(--text-dim);">lbs</div></div>` : '';
-        const repsStr   = maxReps > 0   ? `<div style="text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--orange);">${maxReps}</div><div style="font-size:11px;color:var(--text-dim);">reps</div></div>` : '';
-        html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        const prEntries = ex.entries.filter(e => e.weight === maxWeight || e.reps === maxReps);
+        const latestDate = prEntries.reduce((a, e) => e.date > a ? e.date : a, '');
+        const prTypes = [];
+        if (maxWeight > 0) prTypes.push({ label: '💪 Strength PR', value: maxWeight, unit: 'lbs' });
+        if (maxReps   > 0) prTypes.push({ label: '🔁 Reps PR',     value: maxReps,   unit: 'reps' });
+        const dateStr = new Date(latestDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return { name: ex.name, prTypes, dateStr, latestDate };
+    }).sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+
+    function buildCard(pr) {
+        const badges = pr.prTypes.map(t =>
+            `<div style="text-align:center;">
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px;">${t.label}</div>
+                <div style="font-size:20px;font-weight:800;color:var(--orange);">${t.value}</div>
+                <div style="font-size:11px;color:var(--text-dim);">${t.unit}</div>
+            </div>`
+        ).join('');
+        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
             <div>
-                <div style="font-weight:700;font-size:15px;color:var(--text);text-transform:capitalize;">${escHtml(ex.name)}</div>
-                <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">🏆 PR hit on ${prDates.join(', ')}</div>
+                <div style="font-weight:700;font-size:15px;color:var(--text);text-transform:capitalize;">${escHtml(pr.name)}</div>
+                <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">🏆 Most recent PR — ${pr.dateStr}</div>
             </div>
-            <div style="display:flex;gap:14px;align-items:center;">${weightStr}${repsStr}</div>
+            <div style="display:flex;gap:14px;align-items:center;">${badges}</div>
         </div>`;
-    });
+    }
+
+    const top3 = prList.slice(0, 3);
+    const rest = prList.slice(3);
+
+    let html = `<div style="font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Most Recent PRs</div>`;
+    top3.forEach(pr => { html += buildCard(pr); });
+
+    if (rest.length > 0) {
+        html += `<button onclick="toggleOldPRs()" id="oldPRsBtn" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--text-dim);padding:10px;font-size:13px;cursor:pointer;margin-bottom:8px;">▼ See ${rest.length} more PR${rest.length > 1 ? 's' : ''}</button>`;
+        html += `<div id="oldPRs" style="display:none;">`;
+        rest.forEach(pr => { html += buildCard(pr); });
+        html += `</div>`;
+    }
+
     prsDiv.innerHTML = html;
+}
+
+function toggleOldPRs() {
+    const el  = document.getElementById('oldPRs');
+    const btn = document.getElementById('oldPRsBtn');
+    const open = el.style.display === 'none';
+    el.style.display = open ? 'block' : 'none';
+    const count = el.querySelectorAll('[style*="border-radius:12px"]').length;
+    btn.textContent = open ? `▲ Hide older PRs` : `▼ See ${count} more PR${count > 1 ? 's' : ''}`;
 }
 
 function renderRunningChart() {
     const logs = getAllLogs();
     const runs = [];
+    const thisMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    let monthlyMiles = 0;
     logs.forEach(log => {
         (log.workouts || []).forEach(w => {
             if (w.type === 'run' && w.distance) {
                 runs.push({ date: log._date, distance: w.distance, pace: w.pace, avgHeartRate: w.avgHeartRate, caloriesBurned: w.caloriesBurned });
+                if (log._date && log._date.startsWith(thisMonth)) monthlyMiles += w.distance || 0;
             }
         });
     });
+
+    // Update monthly miles label
+    const labelEl = document.querySelector('#progressRunning div[style*="Miles before smiles"]');
+    if (labelEl) labelEl.innerHTML = `Miles before smiles <span style="color:var(--orange);font-weight:800;margin-left:8px;">${monthlyMiles.toFixed(1)} mi this month</span>`;
 
     const canvas = document.getElementById('runningChart');
     const empty  = document.getElementById('runningEmpty');
