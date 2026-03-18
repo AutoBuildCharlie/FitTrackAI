@@ -1050,6 +1050,7 @@ function addRunCard(data) {
                 ${data.distance ? `<div class="macro-item" style="flex:1;min-width:70px;"><div class="macro-value">${data.distance}</div><div class="macro-label">Miles</div></div>` : ''}
                 ${data.duration ? `<div class="macro-item" style="flex:1;min-width:70px;"><div class="macro-value">${data.duration}</div><div class="macro-label">Min</div></div>` : ''}
                 ${data.pace ? `<div class="macro-item" style="flex:1;min-width:70px;"><div class="macro-value">${data.pace}</div><div class="macro-label">Pace/mi</div></div>` : ''}
+                ${data.avgHeartRate ? `<div class="macro-item" style="flex:1;min-width:70px;"><div class="macro-value">${data.avgHeartRate}</div><div class="macro-label">Avg HR</div></div>` : ''}
                 ${data.caloriesBurned ? `<div class="macro-item" style="flex:1;min-width:70px;"><div class="macro-value">${data.caloriesBurned}</div><div class="macro-label">Cal Burned</div></div>` : ''}
             </div>
         </div>`;
@@ -1382,7 +1383,7 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
                         role: 'user',
                         content: [
                             { type: 'image_url', image_url: { url: base64 } },
-                            { type: 'text', text: 'Look at this image carefully and return ONLY valid JSON. If it is a nutrition facts label or food product, return: {"type": "nutrition", "name": "product name", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "servings": 1}. If it shows a running summary, splits chart, treadmill screen, or any fitness app run data (Strava, Garmin, Apple Watch, Nike Run, etc.) — extract the REAL numbers you can actually read in the image. Return: {"type": "run", "distance": 10.0, "duration": 95, "pace": "9:35", "caloriesBurned": 850, "summary": "10 mile run"}. distance in miles (convert km if needed), duration in total minutes, pace as MM:SS per mile string, caloriesBurned from image if shown or estimate as distance_miles x weight_lbs x 0.63 using 185 lbs default. If it shows a strength/gym workout, return: {"type": "workout", "description": "brief description"}. For anything else return: {"type": "other", "description": "describe what you see"}.' }
+                            { type: 'text', text: 'Look at this image carefully and return ONLY valid JSON.\n\nIf it is a nutrition facts label or food product, return: {"type": "nutrition", "name": "product name", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "servings": 1}.\n\nIf it shows a SPLITS TABLE (rows of mile number, pace, heart rate, elevation) or any running data from Strava, Garmin, Apple Watch, Nike Run, treadmill, etc.:\n- Count the number of mile rows to get total distance in miles\n- Average all the pace values shown (each in M:SS format) to get avg pace as "M:SS"\n- Sum all pace values (1 mile each) to get total duration in minutes\n- Average all HR (heart rate) values shown to get avgHeartRate as a whole number\n- If km shown, convert to miles\nReturn: {"type": "run", "distance": 10, "duration": 95, "pace": "9:21", "avgHeartRate": 158, "summary": "10 mile run"}\nDo NOT include caloriesBurned — the app calculates that from the user\'s weight.\n\nIf it shows a strength/gym workout, return: {"type": "workout", "description": "brief description"}.\nFor anything else return: {"type": "other", "description": "describe what you see"}.' }
                         ]
                     }],
                     max_tokens: 512
@@ -1415,15 +1416,18 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
             } else if (parsed.type === 'run') {
                 const profile = loadProfile();
                 const weightLbs = parseFloat(profile.weight) || 185;
-                const cal = parsed.caloriesBurned || Math.round((parsed.distance || 0) * weightLbs * 0.63);
+                const cal = Math.round((parsed.distance || 0) * weightLbs * 0.63);
                 const runData = {
                     summary:        parsed.summary || `${parsed.distance} mile run`,
                     distance:       parsed.distance,
                     duration:       parsed.duration,
                     pace:           parsed.pace,
+                    avgHeartRate:   parsed.avgHeartRate,
                     caloriesBurned: cal
                 };
-                addBubble('ai', `🏃 Got your run! ${runData.distance} miles in ${runData.duration} min at ${runData.pace}/mi pace. You burned ~${cal} calories. Logged! 🔥`);
+                const paceStr = runData.pace ? ` at ${runData.pace}/mi avg pace` : '';
+                const hrStr   = runData.avgHeartRate ? `, avg HR ${runData.avgHeartRate} bpm` : '';
+                addBubble('ai', `🏃 Got your run! ${runData.distance} miles in ${runData.duration} min${paceStr}${hrStr}. You burned ~${cal} calories. Logged! 🔥`);
                 addRunCard(runData);
                 todayLog.workouts.push({ type: 'run', ...runData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
                 saveLog();
@@ -1707,6 +1711,7 @@ For a WORKOUT (include "weight" in lbs if mentioned, e.g. bench press at 185 lbs
 
 For a RUN (any mention of running, jogging, miles, km):
 {"message": "short reply with calories burned", "log": {"type": "run", "distance": 3.1, "duration": 28, "caloriesBurned": 310, "summary": "3.1 mile run"}}
+Optional run fields — only include if the user mentions them: "pace" (MM:SS string), "avgHeartRate" (number in bpm).
 distance is in miles, duration in minutes, caloriesBurned calculated from weight. If they mention km convert to miles. Always calculate caloriesBurned using: distance_miles × weight_lbs × 0.63 (standard running formula).
 PACE: Only include "pace" in the log if the user explicitly tells you their pace. If they did not mention pace, do NOT include a pace field — do not estimate or make one up. If pace is missing, you may ask "Do you know your average pace?" but still log the run immediately without waiting for an answer.
 
@@ -1900,10 +1905,11 @@ async function askClaude(userMessage) {
             addRunCard(logData);
             todayLog.workouts.push({
                 type: 'run',
-                summary:       logData.summary,
-                distance:      logData.distance,
-                duration:      logData.duration,
-                pace:          logData.pace,
+                summary:        logData.summary,
+                distance:       logData.distance,
+                duration:       logData.duration,
+                pace:           logData.pace,
+                avgHeartRate:   logData.avgHeartRate,
                 caloriesBurned: logData.caloriesBurned,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
@@ -2134,7 +2140,7 @@ function renderRunningChart() {
     logs.forEach(log => {
         (log.workouts || []).forEach(w => {
             if (w.type === 'run' && w.distance) {
-                runs.push({ date: log._date, distance: w.distance, pace: w.pace, caloriesBurned: w.caloriesBurned });
+                runs.push({ date: log._date, distance: w.distance, pace: w.pace, avgHeartRate: w.avgHeartRate, caloriesBurned: w.caloriesBurned });
             }
         });
     });
@@ -2178,11 +2184,14 @@ function renderRunningChart() {
     const totalMiles = runs.reduce((a, r) => a + (r.distance || 0), 0).toFixed(1);
     const totalCal   = runs.reduce((a, r) => a + (r.caloriesBurned || 0), 0);
     const longestRun = Math.max(...runs.map(r => r.distance || 0));
+    const hrRuns     = runs.filter(r => r.avgHeartRate);
+    const avgHR      = hrRuns.length > 0 ? Math.round(hrRuns.reduce((a, r) => a + r.avgHeartRate, 0) / hrRuns.length) : null;
     stats.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-top:8px;">
+        <div style="display:grid;grid-template-columns:${avgHR ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr'};gap:10px;text-align:center;margin-top:8px;">
             <div><div style="font-size:20px;font-weight:800;color:var(--orange);">${totalMiles}</div><div style="font-size:11px;color:var(--text-dim);">Total Miles</div></div>
             <div><div style="font-size:20px;font-weight:800;color:var(--orange);">${longestRun}</div><div style="font-size:11px;color:var(--text-dim);">Longest Run</div></div>
             <div><div style="font-size:20px;font-weight:800;color:var(--orange);">${totalCal}</div><div style="font-size:11px;color:var(--text-dim);">Cal Burned</div></div>
+            ${avgHR ? `<div><div style="font-size:20px;font-weight:800;color:var(--orange);">${avgHR}</div><div style="font-size:11px;color:var(--text-dim);">Avg HR</div></div>` : ''}
         </div>`;
 }
 
