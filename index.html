@@ -854,11 +854,8 @@
             <label class="field-label">Total Calories</label>
             <input type="number" class="field-input" id="goalCalories" placeholder="2000" oninput="recalcMacros()">
         </div>
-        <input type="hidden" id="goalProteinPct" value="30">
-        <input type="hidden" id="goalCarbsPct" value="40">
-        <input type="hidden" id="goalFatPct" value="30">
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Choose a macro split</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Quick presets</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
             <button class="macro-preset-btn" onclick="selectMacroPreset(this,30,40,30)">
                 <div style="font-weight:700;font-size:12px;">Balanced</div>
                 <div style="font-size:10px;opacity:0.7;">30% P · 40% C · 30% F</div>
@@ -876,6 +873,13 @@
                 <div style="font-size:10px;opacity:0.7;">30% P · 20% C · 50% F</div>
             </button>
         </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Or type your own percentages</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px;">
+            <div><label class="field-label">Protein %</label><input type="number" class="field-input" id="goalProteinPct" placeholder="30" min="0" max="100" oninput="recalcMacros()"></div>
+            <div><label class="field-label">Carbs %</label><input type="number" class="field-input" id="goalCarbsPct" placeholder="40" min="0" max="100" oninput="recalcMacros()"></div>
+            <div><label class="field-label">Fat %</label><input type="number" class="field-input" id="goalFatPct" placeholder="30" min="0" max="100" oninput="recalcMacros()"></div>
+        </div>
+        <div id="pctWarning" style="font-size:11px;color:#f87171;margin-bottom:8px;text-align:center;display:none;"></div>
         <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;text-align:center;"></div>
         </div><!-- end settingsFullSection -->
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
@@ -1117,12 +1121,26 @@ function selectMacroPreset(btn, pPct, cPct, fPct) {
 }
 
 function recalcMacros() {
-    const cal   = parseInt(document.getElementById('goalCalories').value) || 0;
-    const pPct  = parseFloat(document.getElementById('goalProteinPct').value) || 30;
-    const cPct  = parseFloat(document.getElementById('goalCarbsPct').value)   || 40;
-    const fPct  = parseFloat(document.getElementById('goalFatPct').value)     || 30;
+    const cal     = parseInt(document.getElementById('goalCalories').value) || 0;
+    const pPct    = parseFloat(document.getElementById('goalProteinPct').value) || 0;
+    const cPct    = parseFloat(document.getElementById('goalCarbsPct').value)   || 0;
+    const fPct    = parseFloat(document.getElementById('goalFatPct').value)     || 0;
+    const total   = pPct + cPct + fPct;
+    const warning = document.getElementById('pctWarning');
     const preview = document.getElementById('macroPreview');
-    if (!cal) { preview.innerHTML = ''; return; }
+    // deactivate presets if user typed custom values
+    document.querySelectorAll('.macro-preset-btn').forEach(btn => {
+        const [bp, bc, bf] = btn.getAttribute('onclick').match(/\d+/g).slice(1).map(Number);
+        if (!(bp === pPct && bc === cPct && bf === fPct)) btn.classList.remove('active');
+    });
+    if (!cal || !pPct) { warning.style.display = 'none'; preview.innerHTML = ''; return; }
+    if (total !== 100) {
+        warning.style.display = 'block';
+        warning.textContent   = `⚠️ ${total}% total — must equal 100%`;
+        preview.innerHTML = '';
+        return;
+    }
+    warning.style.display = 'none';
     const protein = Math.round(cal * pPct / 100 / 4);
     const carbs   = Math.round(cal * cPct / 100 / 4);
     const fat     = Math.round(cal * fPct / 100 / 9);
