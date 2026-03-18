@@ -804,6 +804,7 @@
             <input type="password" class="field-input" id="apiKeyInput" placeholder="gsk_...">
         </div>
 
+        <div id="settingsFullSection">
         <div style="margin-top:20px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">About Me</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px;">
             <div>
@@ -856,6 +857,7 @@
         </div>
         <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;text-align:center;"></div>
         <div id="pctWarning" style="font-size:11px;color:#f87171;margin-bottom:12px;text-align:center;display:none;">⚠️ Percentages must add up to 100%</div>
+        </div><!-- end settingsFullSection -->
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
     </div>
 </div>
@@ -1711,6 +1713,7 @@ function loadProfile() {
 function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
     document.getElementById('apiKeySection').style.display = apiKey ? 'none' : 'block';
+    document.getElementById('settingsFullSection').style.display = apiKey ? 'block' : 'none';
     const g = loadGoals();
     document.getElementById('goalCalories').value   = g.calories;
     document.getElementById('goalProteinPct').value = g.proteinPct || 30;
@@ -1731,17 +1734,20 @@ function saveSettings() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (!key) { alert('Please enter your API key'); return; }
     apiKey = key;
-    saveGoals();
-    renderMacroBar();
     localStorage.setItem('fittrack_groq_key', key);
-    localStorage.setItem('fittrack_profile', JSON.stringify({
-        name:     document.getElementById('profileName').value.trim(),
-        age:      document.getElementById('profileAge').value.trim(),
-        weight:   document.getElementById('profileWeight').value.trim(),
-        heightFt: document.getElementById('profileHeightFt').value.trim(),
-        heightIn: document.getElementById('profileHeightIn').value.trim(),
-        hrMax:    document.getElementById('profileHrMax').value.trim()
-    }));
+    const fullVisible = document.getElementById('settingsFullSection').style.display !== 'none';
+    if (fullVisible) {
+        saveGoals();
+        renderMacroBar();
+        localStorage.setItem('fittrack_profile', JSON.stringify({
+            name:     document.getElementById('profileName').value.trim(),
+            age:      document.getElementById('profileAge').value.trim(),
+            weight:   document.getElementById('profileWeight').value.trim(),
+            heightFt: document.getElementById('profileHeightFt').value.trim(),
+            heightIn: document.getElementById('profileHeightIn').value.trim(),
+            hrMax:    document.getElementById('profileHrMax').value.trim()
+        }));
+    }
     renderProfileDisplay();
     document.getElementById('settingsOverlay').classList.remove('open');
     if (!document.getElementById('messages').querySelector('.message')) {
