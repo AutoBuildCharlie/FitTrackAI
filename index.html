@@ -835,24 +835,27 @@
         </div>
 
         <div style="margin-top:4px;margin-bottom:8px;font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;">Daily Goals</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="margin-bottom:12px;">
+            <label class="field-label">Total Calories</label>
+            <input type="number" class="field-input" id="goalCalories" placeholder="2000" oninput="recalcMacros()">
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Set your macro split — must add up to 100%</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
             <div>
-                <label class="field-label">Calories</label>
-                <input type="number" class="field-input" id="goalCalories" placeholder="2000">
+                <label class="field-label">Protein %</label>
+                <input type="number" class="field-input" id="goalProteinPct" placeholder="30" min="0" max="100" oninput="recalcMacros()">
             </div>
             <div>
-                <label class="field-label">Protein (g)</label>
-                <input type="number" class="field-input" id="goalProtein" placeholder="150">
+                <label class="field-label">Carbs %</label>
+                <input type="number" class="field-input" id="goalCarbsPct" placeholder="40" min="0" max="100" oninput="recalcMacros()">
             </div>
             <div>
-                <label class="field-label">Carbs (g)</label>
-                <input type="number" class="field-input" id="goalCarbs" placeholder="200">
-            </div>
-            <div>
-                <label class="field-label">Fat (g)</label>
-                <input type="number" class="field-input" id="goalFat" placeholder="65">
+                <label class="field-label">Fat %</label>
+                <input type="number" class="field-input" id="goalFatPct" placeholder="30" min="0" max="100" oninput="recalcMacros()">
             </div>
         </div>
+        <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;text-align:center;"></div>
+        <div id="pctWarning" style="font-size:11px;color:#f87171;margin-bottom:12px;text-align:center;display:none;">⚠️ Percentages must add up to 100%</div>
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
     </div>
 </div>
@@ -1078,15 +1081,55 @@ function hideTyping() {
 // ─────────────────────────────────────────
 function loadGoals() {
     const raw = localStorage.getItem('fittrack_goals');
-    return raw ? JSON.parse(raw) : { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+    return raw ? JSON.parse(raw) : { calories: 2000, protein: 150, carbs: 200, fat: 65, proteinPct: 30, carbsPct: 40, fatPct: 30 };
+}
+
+function recalcMacros() {
+    const cal      = parseInt(document.getElementById('goalCalories').value) || 0;
+    const pPct     = parseFloat(document.getElementById('goalProteinPct').value) || 0;
+    const cPct     = parseFloat(document.getElementById('goalCarbsPct').value)   || 0;
+    const fPct     = parseFloat(document.getElementById('goalFatPct').value)     || 0;
+    const total    = pPct + cPct + fPct;
+    const warning  = document.getElementById('pctWarning');
+    const preview  = document.getElementById('macroPreview');
+    if (total !== 100) {
+        warning.style.display = 'block';
+        warning.textContent   = `⚠️ ${total}% total — must equal 100%`;
+        preview.innerHTML = '';
+        return;
+    }
+    warning.style.display = 'none';
+    const protein = Math.round(cal * pPct / 100 / 4);
+    const carbs   = Math.round(cal * cPct / 100 / 4);
+    const fat     = Math.round(cal * fPct / 100 / 9);
+    preview.innerHTML = `
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+            <div style="font-weight:700;color:#60a5fa;">${protein}g</div>
+            <div style="color:var(--text-dim);">Protein</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+            <div style="font-weight:700;color:#a78bfa;">${carbs}g</div>
+            <div style="color:var(--text-dim);">Carbs</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+            <div style="font-weight:700;color:#34d399;">${fat}g</div>
+            <div style="color:var(--text-dim);">Fat</div>
+        </div>`;
 }
 
 function saveGoals() {
+    const cal  = parseInt(document.getElementById('goalCalories').value) || 2000;
+    const pPct = parseFloat(document.getElementById('goalProteinPct').value) || 30;
+    const cPct = parseFloat(document.getElementById('goalCarbsPct').value)   || 40;
+    const fPct = parseFloat(document.getElementById('goalFatPct').value)     || 30;
     const goals = {
-        calories: parseInt(document.getElementById('goalCalories').value) || 2000,
-        protein:  parseInt(document.getElementById('goalProtein').value)  || 150,
-        carbs:    parseInt(document.getElementById('goalCarbs').value)    || 200,
-        fat:      parseInt(document.getElementById('goalFat').value)      || 65
+        calories:   cal,
+        protein:    Math.round(cal * pPct / 100 / 4),
+        carbs:      Math.round(cal * cPct / 100 / 4),
+        fat:        Math.round(cal * fPct / 100 / 9),
+        proteinPct: pPct,
+        carbsPct:   cPct,
+        fatPct:     fPct
     };
     localStorage.setItem('fittrack_goals', JSON.stringify(goals));
     return goals;
@@ -1668,10 +1711,11 @@ function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
     document.getElementById('apiKeySection').style.display = apiKey ? 'none' : 'block';
     const g = loadGoals();
-    document.getElementById('goalCalories').value = g.calories;
-    document.getElementById('goalProtein').value  = g.protein;
-    document.getElementById('goalCarbs').value    = g.carbs;
-    document.getElementById('goalFat').value      = g.fat;
+    document.getElementById('goalCalories').value   = g.calories;
+    document.getElementById('goalProteinPct').value = g.proteinPct || 30;
+    document.getElementById('goalCarbsPct').value   = g.carbsPct   || 40;
+    document.getElementById('goalFatPct').value     = g.fatPct     || 30;
+    recalcMacros();
     const p = loadProfile();
     document.getElementById('profileName').value   = p.name;
     document.getElementById('profileAge').value    = p.age;
@@ -1746,10 +1790,17 @@ CRITICAL — only include a "log" field when the user is FIRST reporting a new a
 
 CRITICAL — you always have the user's weight in their profile. NEVER ask for their weight. Use it directly in all calorie burn calculations.
 
-If Cal asks to change, update, or set his daily macro goals (calories, protein, carbs, fat targets), respond with:
-{"message": "short confirmation of the new goals", "log": {"type": "goals", "calories": 1800, "protein": 140, "carbs": 180, "fat": 60}}
+If Cal asks to change, update, or set his daily macro goals — respond with:
+{"message": "short confirmation", "log": {"type": "goals", "calories": 1800, "protein": 140, "carbs": 180, "fat": 60}}
 
-Only include fields that are being changed. For any field not mentioned, use the word null so it stays unchanged. Be flexible — if he says "increase protein to 160" just update protein.
+If Cal sets goals by PERCENTAGE (e.g. "set my macros to 40% protein, 30% carbs, 30% fat at 1800 calories"), calculate the grams yourself using:
+- Protein grams = calories × proteinPct% ÷ 4
+- Carbs grams = calories × carbsPct% ÷ 4
+- Fat grams = calories × fatPct% ÷ 9
+Then respond with: {"message": "short confirmation showing the calculated grams", "log": {"type": "goals", "calories": 1800, "protein": 180, "carbs": 135, "fat": 60, "proteinPct": 40, "carbsPct": 30, "fatPct": 30}}
+Always verify the percentages add up to 100% before saving. If they don't, tell Cal and ask him to correct them.
+
+Only include fields that are being changed. Be flexible — if he says "increase protein to 160" just update protein.
 
 If Cal asks to delete, clear, or reset data use:
 - Delete everything / all data: {"message": "Done, all data cleared.", "log": {"type": "clear", "target": "all"}}
@@ -1882,11 +1933,18 @@ async function askClaude(userMessage) {
             renderMacroBar();
         } else if (logData?.type === 'goals') {
             const current = loadGoals();
+            const cal     = logData.calories    ?? current.calories;
+            const pPct    = logData.proteinPct  ?? current.proteinPct ?? 30;
+            const cPct    = logData.carbsPct    ?? current.carbsPct   ?? 40;
+            const fPct    = logData.fatPct      ?? current.fatPct     ?? 30;
             const updated = {
-                calories: logData.calories ?? current.calories,
-                protein:  logData.protein  ?? current.protein,
-                carbs:    logData.carbs    ?? current.carbs,
-                fat:      logData.fat      ?? current.fat
+                calories:   cal,
+                protein:    logData.protein ?? Math.round(cal * pPct / 100 / 4),
+                carbs:      logData.carbs   ?? Math.round(cal * cPct / 100 / 4),
+                fat:        logData.fat     ?? Math.round(cal * fPct / 100 / 9),
+                proteinPct: pPct,
+                carbsPct:   cPct,
+                fatPct:     fPct
             };
             localStorage.setItem('fittrack_goals', JSON.stringify(updated));
             renderMacroBar();
