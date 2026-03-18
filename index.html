@@ -2348,7 +2348,12 @@ function addWelcome() {
     const streakMsg = streak >= 1 ? ` 🔥 ${streak} day streak — keep it going!` : '';
     const p = loadProfile();
     const nameStr = p.name ? `, ${p.name}` : '';
-    addBubble('ai', `${greet}${nameStr}! 💪${streakMsg} Ready to track your day. Tell me about a workout or a meal.`);
+    const profileComplete = p.name && p.age && p.weight;
+    if (!profileComplete) {
+        addBubble('ai', `${greet}! 👋 Welcome to FitTrack AI! Before we get started, tap the ⚙️ settings icon in the top right and fill in your name, age, weight, and height. That way I can give you accurate calorie burn, BMR, and macro info.`);
+    } else {
+        addBubble('ai', `${greet}${nameStr}! 💪${streakMsg} Ready to track your day. Tell me about a workout or a meal.`);
+    }
 }
 
 // ─────────────────────────────────────────
