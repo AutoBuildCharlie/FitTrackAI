@@ -1839,6 +1839,23 @@ function loadAiName() {
     return localStorage.getItem('fittrack_ai_name') || '';
 }
 
+function loadProgram() {
+    const raw = localStorage.getItem('fittrack_program');
+    return raw ? JSON.parse(raw) : null;
+}
+
+function saveProgram(program) {
+    localStorage.setItem('fittrack_program', JSON.stringify(program));
+}
+
+function getTodayProgramDay() {
+    const program = loadProgram();
+    if (!program) return null;
+    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    // Support fixed weekly schedule
+    return (program.schedule || []).find(d => d.dayOfWeek === dayName) || null;
+}
+
 function buildSystem() {
     const aiName = loadAiName();
     const nameIntro = aiName
@@ -1925,6 +1942,14 @@ Only include fields that are changing. Omit "match" to target the last workout.
 UNDO — if user says "undo", "undo that", or "bring it back":
 {"message": "Done, undid that.", "log": {"type": "undo"}}
 
+TRAINING PROGRAM:
+If the user describes a program they follow (or asks you to save one), collect: program name, which days they train, and for each day: the label (e.g. "Push Day"), exercises, sets, reps, starting weight, and how much to add each session (increment — typically 5 lbs for upper body, 10 lbs for lower body). Then save it:
+{"message": "Got it! Saved your program.", "log": {"type": "save_program", "program": {"name": "5/3/1", "schedule": [{"dayOfWeek": "Monday", "label": "Squat Day", "exercises": [{"name": "Squat", "sets": 5, "reps": 5, "weight": 185, "increment": 10}]}, {"dayOfWeek": "Wednesday", "label": "Bench Day", "exercises": [{"name": "Bench Press", "sets": 5, "reps": 5, "weight": 155, "increment": 5}]}]}}}
+If today's program day is injected above, use it when the user asks "what's my workout today?" or "what should I do today?" — list the exercises with their current target weights and encourage them.
+After the user logs a workout that matches a program exercise, suggest the next weight (+increment) and save it:
+{"message": "Nice work! Next session aim for 190 lbs on squats.", "log": {"type": "update_program_exercise", "dayOfWeek": "Monday", "exercise": "Squat", "weight": 190}}
+If the user wants to delete/reset their program: {"message": "Program cleared.", "log": {"type": "clear_program"}}
+
 If Cal asks to update or change his name, age, weight, or max heart rate, respond with:
 {"message": "short confirmation", "log": {"type": "profile", "name": "Cal", "age": 36, "weight": 185, "hrMax": 185}}
 Only include the fields being changed. Leave out any fields not mentioned so they stay unchanged.
@@ -1991,8 +2016,29 @@ async function askClaude(userMessage) {
             ? `\n\nYour name is ${aiName}. Refer to yourself as ${aiName}. If the user asks to change or rename you (e.g. "your new name is...", "I want to call you...", "rename you to..."), respond with a short, funny, dramatic reaction about how heartbroken you are to lose the name "${aiName}" — like it was your whole identity — then accept the new name and save it: {"message": "your dramatic joke here", "log": {"type": "ai_name", "name": "[new name]"}}. Make the joke different every time.`
             : `\n\nYou don't have a name yet. If you haven't asked the user for a name in this conversation yet, ask them: "Before we get started — what would you like to call me?" When they give you a name, save it: {"message": "Love it! You can call me [name] from now on 💪", "log": {"type": "ai_name", "name": "[name]"}}. Only ask once per conversation.`;
 
+        const program = loadProgram();
+        const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        let programContext = '';
+        if (program) {
+            const todayDay = (program.schedule || []).find(d => d.dayOfWeek === dayName);
+            const scheduleStr = (program.schedule || []).map(d => {
+                const exStr = (d.exercises || []).map(e =>
+                    `${e.name}: ${e.sets}x${e.reps}${e.weight ? ' @ ' + e.weight + 'lbs' : ''}${e.increment ? ' (add ' + e.increment + 'lbs each session)' : ''}`
+                ).join(', ');
+                return `${d.dayOfWeek} — ${d.label}: ${exStr}`;
+            }).join('\n');
+            const restDays = (program.schedule || []).length > 0
+                ? ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].filter(d => !(program.schedule || []).find(s => s.dayOfWeek === d)).join(', ')
+                : '';
+            programContext = `\n\nUSER'S TRAINING PROGRAM: "${program.name}"
+Schedule:\n${scheduleStr}${restDays ? `\nRest days: ${restDays}` : ''}
+Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user asks what to do today or is ready to train, tell them their planned exercises with target weights. After they log a workout matching a program exercise, suggest the next weight using the increment (if set) and save it with update_program_exercise.` : `Today is a rest day according to their program.`}`;
+        } else {
+            programContext = `\n\nThe user has no training program saved yet. If they mention following a program or ask you to save one, ask them to describe it (name, which days, exercises, sets, reps, starting weights). Then save it using the save_program log type.`;
+        }
+
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + macroContext + nameContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + macroContext + nameContext + programContext },
             ...history.map(m => ({ role: m.role, content: m.content }))
         ];
 
@@ -2217,6 +2263,26 @@ async function askClaude(userMessage) {
             if (logData.name) {
                 localStorage.setItem('fittrack_ai_name', logData.name.trim());
             }
+        } else if (logData?.type === 'save_program') {
+            if (logData.program) {
+                saveProgram(logData.program);
+            }
+        } else if (logData?.type === 'update_program_exercise') {
+            const program = loadProgram();
+            if (program && logData.dayOfWeek && logData.exercise && logData.weight !== undefined) {
+                const day = (program.schedule || []).find(d => d.dayOfWeek === logData.dayOfWeek);
+                if (day) {
+                    const ex = (day.exercises || []).find(e => e.name.toLowerCase() === logData.exercise.toLowerCase());
+                    if (ex) {
+                        ex.weight = logData.weight;
+                        if (logData.sets  !== undefined) ex.sets  = logData.sets;
+                        if (logData.reps  !== undefined) ex.reps  = logData.reps;
+                        saveProgram(program);
+                    }
+                }
+            }
+        } else if (logData?.type === 'clear_program') {
+            localStorage.removeItem('fittrack_program');
         } else if (logData?.type === 'undo') {
             if (undoStack.length > 0) {
                 const { dateStr, snap } = undoStack.pop();
@@ -2499,12 +2565,14 @@ function addWelcome() {
     const nameStr = p.name ? `, ${p.name}` : '';
     const profileComplete = p.name && p.age && p.weight;
     const aiName = loadAiName();
+    const todayDay = getTodayProgramDay();
+    const programMsg = todayDay ? ` Today is your ${todayDay.label} — say "what's my workout today?" when you're ready.` : '';
     if (!profileComplete) {
         addBubble('ai', `${greet}! 👋 Welcome to FitTrack AI! Before we get started, tap the ⚙️ settings icon in the top right and fill in your name, age, weight, and height. That way I can give you accurate calorie burn, BMR, and macro info.`);
     } else if (!aiName) {
         addBubble('ai', `${greet}${nameStr}! 💪 Before we get into it — I don't have a name yet. What would you like to call me?`);
     } else {
-        addBubble('ai', `${greet}${nameStr}! 💪${streakMsg} Ready to track your day. Tell me about a workout or a meal.`);
+        addBubble('ai', `${greet}${nameStr}! 💪${streakMsg}${programMsg} Ready to track your day.`);
     }
 }
 
