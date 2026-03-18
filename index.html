@@ -1207,7 +1207,6 @@ function renderProfileDisplay() {
     const el = document.getElementById('profileDisplay');
     if (!el) return;
     const parts = [];
-    if (p.name)   parts.push(p.name);
     if (p.age)    parts.push(p.age + ' yrs');
     if (p.weight) parts.push(p.weight + ' lbs');
     const bmr = calcBMR(p);
@@ -2342,8 +2341,8 @@ function addWelcome() {
     const streak = getStreak();
     const streakMsg = streak >= 1 ? ` 🔥 ${streak} day streak — keep it going!` : '';
     const p = loadProfile();
-    const name = p.name ? `, ${p.name}` : '';
-    addBubble('ai', `${greet}${name}! 💪${streakMsg} Ready to track your day. Tell me about a workout or a meal.`);
+    const nameStr = p.name ? `, ${p.name}` : '';
+    addBubble('ai', `${greet}${nameStr}! 💪${streakMsg} Ready to track your day. Tell me about a workout or a meal.`);
 }
 
 // ─────────────────────────────────────────
