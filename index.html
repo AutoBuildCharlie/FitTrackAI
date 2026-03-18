@@ -938,6 +938,37 @@ function todayKey() {
     return 'fittrack_' + new Date().toISOString().split('T')[0];
 }
 
+function dateKey(dateStr) {
+    return 'fittrack_' + dateStr;
+}
+
+function getLogForDate(dateStr) {
+    const today = new Date().toISOString().split('T')[0];
+    if (!dateStr || dateStr === today) return todayLog;
+    const raw = localStorage.getItem(dateKey(dateStr));
+    return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+}
+
+function setLogForDate(dateStr, log) {
+    const today = new Date().toISOString().split('T')[0];
+    if (!dateStr || dateStr === today) {
+        todayLog.workouts = log.workouts;
+        todayLog.meals    = log.meals;
+        saveLog();
+        renderMacroBar();
+    } else {
+        localStorage.setItem(dateKey(dateStr), JSON.stringify(log));
+    }
+}
+
+// Undo stack — stores {date, log} snapshots before edits/deletes
+const undoStack = [];
+function pushUndo(dateStr) {
+    const snap = JSON.parse(JSON.stringify(getLogForDate(dateStr)));
+    undoStack.push({ dateStr, snap });
+    if (undoStack.length > 10) undoStack.shift();
+}
+
 function loadTodayLog() {
     const raw = localStorage.getItem(todayKey());
     return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
@@ -1862,25 +1893,24 @@ If Cal asks to delete, clear, or reset data use:
 - Delete the whole week: {"message": "Done, week cleared.", "log": {"type": "clear", "target": "week"}}
 - Delete a specific run from a specific date: {"message": "Done, removed that run.", "log": {"type": "delete_run", "date": "YYYY-MM-DD"}}
   Use today's date if the user says "today" or doesn't specify. If a user says "delete my run from Tuesday" figure out the date from context.
-- Edit/adjust a run's distance (e.g. "remove 2 miles", "change today's run to 8 miles"): {"message": "Updated — run changed to 8 miles.", "log": {"type": "edit_run", "date": "YYYY-MM-DD", "distance": 8}}
-  Calculate the new distance yourself (e.g. if they logged 10 miles and say "remove 2", set distance to 8). Calories will be recalculated automatically — do not include caloriesBurned.
-Never pretend to delete data — only use the log action above to actually do it.
+- Edit a run (distance, duration, or pace — any combo): {"message": "Updated.", "log": {"type": "edit_run", "date": "YYYY-MM-DD", "distance": 8, "duration": 75, "pace": "9:30"}}
+  Only include fields being changed. Calculate new distance yourself if user says "remove 2 miles" (10-2=8). Calories auto-recalculate — never include caloriesBurned.
+Never pretend to delete data — only use the log actions above to actually do it.
 
-If Cal asks to MODIFY, EDIT, SUBTRACT, ADD TO, or ADJUST macros of a meal already logged — do NOT log a new meal. Update the existing one using:
-{"message": "short confirmation", "log": {"type": "edit_meal", "match": "chicken rice", "calories": 920, "protein": 53, "carbs": 100, "fat": 44}}
-"match" is a keyword from the meal name to find it. If no specific meal is mentioned, target the last one. Only include the macro fields that are changing.
+MEALS (all support optional "date": "YYYY-MM-DD", defaults to today):
+- REPLACE meal macros: {"message": "Updated.", "log": {"type": "edit_meal", "match": "chicken", "date": "YYYY-MM-DD", "calories": 920, "protein": 53, "carbs": 100, "fat": 44}}
+- ADD macros on top (e.g. "I added a side of rice"): {"message": "Added.", "log": {"type": "edit_meal", "match": "chicken", "mode": "add", "calories": 200, "carbs": 40, "protein": 4, "fat": 1}}
+- DELETE a meal: {"message": "Removed.", "log": {"type": "delete_meal", "match": "pizza", "date": "YYYY-MM-DD"}}
+- COPY a past meal to today: {"message": "Copied.", "log": {"type": "copy_meal", "date": "YYYY-MM-DD", "match": "breakfast"}}
+Omit "match" to target the last logged meal.
 
-If Cal asks to DELETE or REMOVE a specific meal (e.g. "delete the pizza", "remove my breakfast"):
-{"message": "Done, removed that meal.", "log": {"type": "delete_meal", "match": "pizza"}}
-"match" is a keyword from the meal summary. If no specific meal mentioned, remove the last one.
+WORKOUTS (all support optional "date": "YYYY-MM-DD", defaults to today):
+- DELETE a workout: {"message": "Removed.", "log": {"type": "delete_workout", "match": "bench press", "date": "YYYY-MM-DD"}}
+- EDIT a workout: {"message": "Updated.", "log": {"type": "edit_workout", "match": "squat", "date": "YYYY-MM-DD", "weight": 225, "sets": 5, "reps": 3}}
+Only include fields that are changing. Omit "match" to target the last workout.
 
-If Cal asks to DELETE or REMOVE a specific workout/exercise (e.g. "delete my bench press", "remove the deadlift"):
-{"message": "Done, removed that workout.", "log": {"type": "delete_workout", "match": "bench press"}}
-"match" is a keyword from the exercise or workout summary. If no specific one mentioned, remove the last workout.
-
-If Cal asks to EDIT or MODIFY a workout (e.g. "change bench press to 200 lbs", "update my squat to 5 sets"):
-{"message": "Updated.", "log": {"type": "edit_workout", "match": "bench press", "weight": 200, "sets": 5, "reps": 8}}
-Only include the fields that are changing. "match" targets the workout by exercise name.
+UNDO — if user says "undo", "undo that", or "bring it back":
+{"message": "Done, undid that.", "log": {"type": "undo"}}
 
 If Cal asks to update or change his name, age, weight, or max heart rate, respond with:
 {"message": "short confirmation", "log": {"type": "profile", "name": "Cal", "age": 36, "weight": 185, "hrMax": 185}}
@@ -1989,39 +2019,27 @@ async function askClaude(userMessage) {
         if (displayText) addBubble('ai', displayText);
 
         if (logData?.type === 'edit_run') {
-            const editDate = logData.date || new Date().toISOString().split('T')[0];
-            const newDist  = parseFloat(logData.distance) || 0;
-            const editProfile = loadProfile();
-            const editWeight  = parseFloat(editProfile.weight) || 185;
-            const newCal      = Math.round(newDist * editWeight * 0.63);
-            if (editDate === new Date().toISOString().split('T')[0]) {
-                const run = todayLog.workouts.find(w => w.type === 'run');
-                if (run) { run.distance = newDist; run.caloriesBurned = newCal; run.summary = `${newDist} mile run`; }
-                saveLog();
-                renderMacroBar();
-            } else {
-                const raw = localStorage.getItem('fittrack_' + editDate);
-                if (raw) {
-                    const dayLog = JSON.parse(raw);
-                    const run = (dayLog.workouts || []).find(w => w.type === 'run');
-                    if (run) { run.distance = newDist; run.caloriesBurned = newCal; run.summary = `${newDist} mile run`; }
-                    localStorage.setItem('fittrack_' + editDate, JSON.stringify(dayLog));
+            const editDate   = logData.date || new Date().toISOString().split('T')[0];
+            const editWeight = parseFloat(loadProfile().weight) || 185;
+            pushUndo(editDate);
+            const dayLog = getLogForDate(editDate);
+            const run = (dayLog.workouts || []).find(w => w.type === 'run');
+            if (run) {
+                if (logData.distance !== undefined) {
+                    run.distance       = parseFloat(logData.distance);
+                    run.caloriesBurned = Math.round(run.distance * editWeight * 0.63);
+                    run.summary        = `${run.distance} mile run`;
                 }
+                if (logData.duration !== undefined) run.duration = logData.duration;
+                if (logData.pace     !== undefined) run.pace     = logData.pace;
             }
+            setLogForDate(editDate, dayLog);
         } else if (logData?.type === 'delete_run') {
             const targetDate = logData.date || new Date().toISOString().split('T')[0];
-            if (targetDate === new Date().toISOString().split('T')[0]) {
-                todayLog.workouts = todayLog.workouts.filter(w => w.type !== 'run');
-                saveLog();
-                renderMacroBar();
-            } else {
-                const raw = localStorage.getItem('fittrack_' + targetDate);
-                if (raw) {
-                    const dayLog = JSON.parse(raw);
-                    dayLog.workouts = (dayLog.workouts || []).filter(w => w.type !== 'run');
-                    localStorage.setItem('fittrack_' + targetDate, JSON.stringify(dayLog));
-                }
-            }
+            pushUndo(targetDate);
+            const dayLog = getLogForDate(targetDate);
+            dayLog.workouts = (dayLog.workouts || []).filter(w => w.type !== 'run');
+            setLogForDate(targetDate, dayLog);
         } else if (logData?.type === 'clear') {
             const target = logData.target || 'all';
             if (target === 'workouts') {
@@ -2113,52 +2131,74 @@ async function askClaude(userMessage) {
             saveLog();
             renderStreak();
         } else if (logData?.type === 'edit_meal') {
-            if (todayLog.meals.length > 0) {
-                const kw   = (logData.match || '').toLowerCase();
-                const meal = kw
-                    ? todayLog.meals.find(m => (m.summary || '').toLowerCase().includes(kw))
-                    : todayLog.meals[todayLog.meals.length - 1];
-                const target = meal || todayLog.meals[todayLog.meals.length - 1];
-                if (logData.calories !== undefined) target.calories = logData.calories;
-                if (logData.protein  !== undefined) target.protein  = logData.protein;
-                if (logData.carbs    !== undefined) target.carbs    = logData.carbs;
-                if (logData.fat      !== undefined) target.fat      = logData.fat;
+            const emDate = logData.date || new Date().toISOString().split('T')[0];
+            pushUndo(emDate);
+            const emLog = getLogForDate(emDate);
+            if (emLog.meals && emLog.meals.length > 0) {
+                const kw     = (logData.match || '').toLowerCase();
+                const target = (kw ? emLog.meals.find(m => (m.summary || '').toLowerCase().includes(kw)) : null)
+                             || emLog.meals[emLog.meals.length - 1];
+                const addMode = logData.mode === 'add';
+                if (logData.calories !== undefined) target.calories = addMode ? (target.calories || 0) + logData.calories : logData.calories;
+                if (logData.protein  !== undefined) target.protein  = addMode ? (target.protein  || 0) + logData.protein  : logData.protein;
+                if (logData.carbs    !== undefined) target.carbs    = addMode ? (target.carbs    || 0) + logData.carbs    : logData.carbs;
+                if (logData.fat      !== undefined) target.fat      = addMode ? (target.fat      || 0) + logData.fat      : logData.fat;
                 if (logData.summary  !== undefined) target.summary  = logData.summary;
-                saveLog();
-                renderMacroBar();
+                setLogForDate(emDate, emLog);
             }
         } else if (logData?.type === 'delete_meal') {
-            if (todayLog.meals.length > 0) {
-                const kw = (logData.match || '').toLowerCase();
-                const idx = kw
-                    ? todayLog.meals.findIndex(m => (m.summary || '').toLowerCase().includes(kw))
-                    : todayLog.meals.length - 1;
-                if (idx !== -1) todayLog.meals.splice(idx, 1);
-                saveLog();
-                renderMacroBar();
-            }
+            const dmDate = logData.date || new Date().toISOString().split('T')[0];
+            pushUndo(dmDate);
+            const dmLog = getLogForDate(dmDate);
+            const kw = (logData.match || '').toLowerCase();
+            const idx = kw
+                ? (dmLog.meals || []).findIndex(m => (m.summary || '').toLowerCase().includes(kw))
+                : (dmLog.meals || []).length - 1;
+            if (idx !== -1) (dmLog.meals || []).splice(idx, 1);
+            setLogForDate(dmDate, dmLog);
         } else if (logData?.type === 'delete_workout') {
-            if (todayLog.workouts.length > 0) {
-                const kw = (logData.match || '').toLowerCase();
-                const idx = kw
-                    ? todayLog.workouts.findIndex(w => (w.summary || '' + JSON.stringify(w.exercises || [])).toLowerCase().includes(kw))
-                    : todayLog.workouts.length - 1;
-                if (idx !== -1) todayLog.workouts.splice(idx, 1);
-                saveLog();
-                renderMacroBar();
-            }
+            const dwDate = logData.date || new Date().toISOString().split('T')[0];
+            pushUndo(dwDate);
+            const dwLog = getLogForDate(dwDate);
+            const kw = (logData.match || '').toLowerCase();
+            const idx = kw
+                ? (dwLog.workouts || []).findIndex(w => (w.summary || JSON.stringify(w.exercises || [])).toLowerCase().includes(kw))
+                : (dwLog.workouts || []).length - 1;
+            if (idx !== -1) (dwLog.workouts || []).splice(idx, 1);
+            setLogForDate(dwDate, dwLog);
         } else if (logData?.type === 'edit_workout') {
-            if (todayLog.workouts.length > 0) {
-                const kw = (logData.match || '').toLowerCase();
-                const workout = kw
-                    ? todayLog.workouts.find(w => (w.summary || '' + JSON.stringify(w.exercises || [])).toLowerCase().includes(kw))
-                    : todayLog.workouts[todayLog.workouts.length - 1];
-                const target = workout || todayLog.workouts[todayLog.workouts.length - 1];
+            const ewDate = logData.date || new Date().toISOString().split('T')[0];
+            pushUndo(ewDate);
+            const ewLog = getLogForDate(ewDate);
+            if (ewLog.workouts && ewLog.workouts.length > 0) {
+                const kw     = (logData.match || '').toLowerCase();
+                const target = (kw ? ewLog.workouts.find(w => (w.summary || JSON.stringify(w.exercises || [])).toLowerCase().includes(kw)) : null)
+                             || ewLog.workouts[ewLog.workouts.length - 1];
                 if (logData.weight  !== undefined) target.weight  = logData.weight;
                 if (logData.sets    !== undefined) target.sets    = logData.sets;
                 if (logData.reps    !== undefined) target.reps    = logData.reps;
                 if (logData.summary !== undefined) target.summary = logData.summary;
-                saveLog();
+                setLogForDate(ewDate, ewLog);
+            }
+        } else if (logData?.type === 'copy_meal') {
+            const fromDate = logData.date;
+            const kw = (logData.match || '').toLowerCase();
+            if (fromDate) {
+                const srcLog = getLogForDate(fromDate);
+                const meal = kw
+                    ? (srcLog.meals || []).find(m => (m.summary || '').toLowerCase().includes(kw))
+                    : (srcLog.meals || [])[srcLog.meals.length - 1];
+                if (meal) {
+                    const copied = { ...meal, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                    todayLog.meals.push(copied);
+                    saveLog();
+                    renderMacroBar();
+                }
+            }
+        } else if (logData?.type === 'undo') {
+            if (undoStack.length > 0) {
+                const { dateStr, snap } = undoStack.pop();
+                setLogForDate(dateStr, snap);
             }
         }
 
