@@ -1866,9 +1866,21 @@ If Cal asks to delete, clear, or reset data use:
   Calculate the new distance yourself (e.g. if they logged 10 miles and say "remove 2", set distance to 8). Calories will be recalculated automatically — do not include caloriesBurned.
 Never pretend to delete data — only use the log action above to actually do it.
 
-If Cal asks to MODIFY, EDIT, SUBTRACT, ADD TO, or ADJUST macros of a meal already logged (e.g. "subtract 20 carbs", "reduce the fat", "change that to 800 calories") — do NOT log a new meal. Update the existing one using:
-{"message": "short confirmation of the change", "log": {"type": "edit_meal", "calories": 920, "protein": 53, "carbs": 100, "fat": 44, "summary": "updated meal name"}}
-Only include the macro fields that are changing. This replaces the last logged meal's values without creating a duplicate.
+If Cal asks to MODIFY, EDIT, SUBTRACT, ADD TO, or ADJUST macros of a meal already logged — do NOT log a new meal. Update the existing one using:
+{"message": "short confirmation", "log": {"type": "edit_meal", "match": "chicken rice", "calories": 920, "protein": 53, "carbs": 100, "fat": 44}}
+"match" is a keyword from the meal name to find it. If no specific meal is mentioned, target the last one. Only include the macro fields that are changing.
+
+If Cal asks to DELETE or REMOVE a specific meal (e.g. "delete the pizza", "remove my breakfast"):
+{"message": "Done, removed that meal.", "log": {"type": "delete_meal", "match": "pizza"}}
+"match" is a keyword from the meal summary. If no specific meal mentioned, remove the last one.
+
+If Cal asks to DELETE or REMOVE a specific workout/exercise (e.g. "delete my bench press", "remove the deadlift"):
+{"message": "Done, removed that workout.", "log": {"type": "delete_workout", "match": "bench press"}}
+"match" is a keyword from the exercise or workout summary. If no specific one mentioned, remove the last workout.
+
+If Cal asks to EDIT or MODIFY a workout (e.g. "change bench press to 200 lbs", "update my squat to 5 sets"):
+{"message": "Updated.", "log": {"type": "edit_workout", "match": "bench press", "weight": 200, "sets": 5, "reps": 8}}
+Only include the fields that are changing. "match" targets the workout by exercise name.
 
 If Cal asks to update or change his name, age, weight, or max heart rate, respond with:
 {"message": "short confirmation", "log": {"type": "profile", "name": "Cal", "age": 36, "weight": 185, "hrMax": 185}}
@@ -2102,14 +2114,51 @@ async function askClaude(userMessage) {
             renderStreak();
         } else if (logData?.type === 'edit_meal') {
             if (todayLog.meals.length > 0) {
-                const last = todayLog.meals[todayLog.meals.length - 1];
-                if (logData.calories !== undefined) last.calories = logData.calories;
-                if (logData.protein  !== undefined) last.protein  = logData.protein;
-                if (logData.carbs    !== undefined) last.carbs    = logData.carbs;
-                if (logData.fat      !== undefined) last.fat      = logData.fat;
-                if (logData.summary  !== undefined) last.summary  = logData.summary;
+                const kw   = (logData.match || '').toLowerCase();
+                const meal = kw
+                    ? todayLog.meals.find(m => (m.summary || '').toLowerCase().includes(kw))
+                    : todayLog.meals[todayLog.meals.length - 1];
+                const target = meal || todayLog.meals[todayLog.meals.length - 1];
+                if (logData.calories !== undefined) target.calories = logData.calories;
+                if (logData.protein  !== undefined) target.protein  = logData.protein;
+                if (logData.carbs    !== undefined) target.carbs    = logData.carbs;
+                if (logData.fat      !== undefined) target.fat      = logData.fat;
+                if (logData.summary  !== undefined) target.summary  = logData.summary;
                 saveLog();
                 renderMacroBar();
+            }
+        } else if (logData?.type === 'delete_meal') {
+            if (todayLog.meals.length > 0) {
+                const kw = (logData.match || '').toLowerCase();
+                const idx = kw
+                    ? todayLog.meals.findIndex(m => (m.summary || '').toLowerCase().includes(kw))
+                    : todayLog.meals.length - 1;
+                if (idx !== -1) todayLog.meals.splice(idx, 1);
+                saveLog();
+                renderMacroBar();
+            }
+        } else if (logData?.type === 'delete_workout') {
+            if (todayLog.workouts.length > 0) {
+                const kw = (logData.match || '').toLowerCase();
+                const idx = kw
+                    ? todayLog.workouts.findIndex(w => (w.summary || '' + JSON.stringify(w.exercises || [])).toLowerCase().includes(kw))
+                    : todayLog.workouts.length - 1;
+                if (idx !== -1) todayLog.workouts.splice(idx, 1);
+                saveLog();
+                renderMacroBar();
+            }
+        } else if (logData?.type === 'edit_workout') {
+            if (todayLog.workouts.length > 0) {
+                const kw = (logData.match || '').toLowerCase();
+                const workout = kw
+                    ? todayLog.workouts.find(w => (w.summary || '' + JSON.stringify(w.exercises || [])).toLowerCase().includes(kw))
+                    : todayLog.workouts[todayLog.workouts.length - 1];
+                const target = workout || todayLog.workouts[todayLog.workouts.length - 1];
+                if (logData.weight  !== undefined) target.weight  = logData.weight;
+                if (logData.sets    !== undefined) target.sets    = logData.sets;
+                if (logData.reps    !== undefined) target.reps    = logData.reps;
+                if (logData.summary !== undefined) target.summary = logData.summary;
+                saveLog();
             }
         }
 
