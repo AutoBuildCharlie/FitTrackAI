@@ -540,6 +540,20 @@
             margin-bottom: 8px;
         }
 
+        .macro-preset-btn {
+            background: var(--bg3);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 8px;
+            color: var(--text);
+            cursor: pointer;
+            text-align: center;
+            transition: border-color 0.2s, background 0.2s;
+            width: 100%;
+        }
+        .macro-preset-btn:hover { border-color: var(--orange); }
+        .macro-preset-btn.active { border-color: var(--orange); background: rgba(251,146,60,0.12); }
+
         .field-input {
             width: 100%;
             background: var(--bg3);
@@ -840,23 +854,29 @@
             <label class="field-label">Total Calories</label>
             <input type="number" class="field-input" id="goalCalories" placeholder="2000" oninput="recalcMacros()">
         </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Set your macro split — must add up to 100%</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
-            <div>
-                <label class="field-label">Protein %</label>
-                <input type="number" class="field-input" id="goalProteinPct" placeholder="30" min="0" max="100" oninput="recalcMacros()">
-            </div>
-            <div>
-                <label class="field-label">Carbs %</label>
-                <input type="number" class="field-input" id="goalCarbsPct" placeholder="40" min="0" max="100" oninput="recalcMacros()">
-            </div>
-            <div>
-                <label class="field-label">Fat %</label>
-                <input type="number" class="field-input" id="goalFatPct" placeholder="30" min="0" max="100" oninput="recalcMacros()">
-            </div>
+        <input type="hidden" id="goalProteinPct" value="30">
+        <input type="hidden" id="goalCarbsPct" value="40">
+        <input type="hidden" id="goalFatPct" value="30">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Choose a macro split</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <button class="macro-preset-btn" onclick="selectMacroPreset(this,30,40,30)">
+                <div style="font-weight:700;font-size:12px;">Balanced</div>
+                <div style="font-size:10px;opacity:0.7;">30% P · 40% C · 30% F</div>
+            </button>
+            <button class="macro-preset-btn" onclick="selectMacroPreset(this,40,35,25)">
+                <div style="font-weight:700;font-size:12px;">High Protein</div>
+                <div style="font-size:10px;opacity:0.7;">40% P · 35% C · 25% F</div>
+            </button>
+            <button class="macro-preset-btn" onclick="selectMacroPreset(this,25,50,25)">
+                <div style="font-weight:700;font-size:12px;">High Carb</div>
+                <div style="font-size:10px;opacity:0.7;">25% P · 50% C · 25% F</div>
+            </button>
+            <button class="macro-preset-btn" onclick="selectMacroPreset(this,30,20,50)">
+                <div style="font-weight:700;font-size:12px;">Low Carb</div>
+                <div style="font-size:10px;opacity:0.7;">30% P · 20% C · 50% F</div>
+            </button>
         </div>
-        <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;text-align:center;"></div>
-        <div id="pctWarning" style="font-size:11px;color:#f87171;margin-bottom:12px;text-align:center;display:none;">⚠️ Percentages must add up to 100%</div>
+        <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;text-align:center;"></div>
         </div><!-- end settingsFullSection -->
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
     </div>
@@ -1087,34 +1107,35 @@ function loadGoals() {
     return raw ? JSON.parse(raw) : { calories: 2000, protein: 150, carbs: 200, fat: 65, proteinPct: 30, carbsPct: 40, fatPct: 30 };
 }
 
+function selectMacroPreset(btn, pPct, cPct, fPct) {
+    document.querySelectorAll('.macro-preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('goalProteinPct').value = pPct;
+    document.getElementById('goalCarbsPct').value   = cPct;
+    document.getElementById('goalFatPct').value     = fPct;
+    recalcMacros();
+}
+
 function recalcMacros() {
-    const cal      = parseInt(document.getElementById('goalCalories').value) || 0;
-    const pPct     = parseFloat(document.getElementById('goalProteinPct').value) || 0;
-    const cPct     = parseFloat(document.getElementById('goalCarbsPct').value)   || 0;
-    const fPct     = parseFloat(document.getElementById('goalFatPct').value)     || 0;
-    const total    = pPct + cPct + fPct;
-    const warning  = document.getElementById('pctWarning');
-    const preview  = document.getElementById('macroPreview');
-    if (total !== 100) {
-        warning.style.display = 'block';
-        warning.textContent   = `⚠️ ${total}% total — must equal 100%`;
-        preview.innerHTML = '';
-        return;
-    }
-    warning.style.display = 'none';
+    const cal   = parseInt(document.getElementById('goalCalories').value) || 0;
+    const pPct  = parseFloat(document.getElementById('goalProteinPct').value) || 30;
+    const cPct  = parseFloat(document.getElementById('goalCarbsPct').value)   || 40;
+    const fPct  = parseFloat(document.getElementById('goalFatPct').value)     || 30;
+    const preview = document.getElementById('macroPreview');
+    if (!cal) { preview.innerHTML = ''; return; }
     const protein = Math.round(cal * pPct / 100 / 4);
     const carbs   = Math.round(cal * cPct / 100 / 4);
     const fat     = Math.round(cal * fPct / 100 / 9);
     preview.innerHTML = `
-        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;text-align:center;">
             <div style="font-weight:700;color:#60a5fa;">${protein}g</div>
             <div style="color:var(--text-dim);">Protein</div>
         </div>
-        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;text-align:center;">
             <div style="font-weight:700;color:#a78bfa;">${carbs}g</div>
             <div style="color:var(--text-dim);">Carbs</div>
         </div>
-        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 4px;font-size:12px;text-align:center;">
             <div style="font-weight:700;color:#34d399;">${fat}g</div>
             <div style="color:var(--text-dim);">Fat</div>
         </div>`;
@@ -1719,6 +1740,12 @@ function openSettings() {
     document.getElementById('goalProteinPct').value = g.proteinPct || 30;
     document.getElementById('goalCarbsPct').value   = g.carbsPct   || 40;
     document.getElementById('goalFatPct').value     = g.fatPct     || 30;
+    // highlight matching preset button
+    const pPct = g.proteinPct || 30, cPct = g.carbsPct || 40, fPct = g.fatPct || 30;
+    document.querySelectorAll('.macro-preset-btn').forEach(btn => {
+        const [bp, bc, bf] = btn.getAttribute('onclick').match(/\d+/g).slice(1).map(Number);
+        btn.classList.toggle('active', bp === pPct && bc === cPct && bf === fPct);
+    });
     recalcMacros();
     const p = loadProfile();
     document.getElementById('profileName').value   = p.name;
