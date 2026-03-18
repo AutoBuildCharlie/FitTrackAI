@@ -2012,17 +2012,17 @@ Only include fields that are changing. Omit "match" to target the last workout.
 UNDO — if user says "undo", "undo that", or "bring it back":
 {"message": "Done, undid that.", "log": {"type": "undo"}}
 
-BODYWEIGHT LOGGING:
-If the user tells you their current weight or says they weighed in (e.g. "I weigh 183 today", "just weighed myself — 180 lbs"):
-{"message": "Logged! Weighed in at 183 lbs today.", "log": {"type": "weight_log", "weight": 183}}
-This also updates their profile weight automatically.
+BODYWEIGHT LOGGING — all support optional "date": "YYYY-MM-DD" (defaults to today):
+- Log or edit a weigh-in: {"message": "Logged!", "log": {"type": "weight_log", "weight": 183, "date": "YYYY-MM-DD"}}
+- Delete a weigh-in: {"message": "Removed that weigh-in.", "log": {"type": "weight_log", "action": "delete", "date": "YYYY-MM-DD"}}
+Today's entry also updates their profile weight automatically.
 
-WATER TRACKING:
-If the user mentions drinking water, logs water intake, or asks about hydration:
-- Add glasses: {"message": "Logged!", "log": {"type": "water", "action": "add", "glasses": 1}}
-- Set exact amount: {"message": "Got it, updated your water.", "log": {"type": "water", "glasses": 4}}
-- Change daily goal: {"message": "Water goal updated to 10 glasses.", "log": {"type": "water", "goal": 10}}
-Default goal is 8 glasses. If user says "I drank 3 glasses" use set (glasses:3). If they say "I had another glass" use add (glasses:1).
+WATER TRACKING — all support optional "date": "YYYY-MM-DD" (defaults to today):
+- Add a glass: {"message": "Logged!", "log": {"type": "water", "action": "add", "glasses": 1}}
+- Set exact count: {"message": "Updated your water.", "log": {"type": "water", "glasses": 4, "date": "YYYY-MM-DD"}}
+- Delete a day's water log: {"message": "Cleared water for that day.", "log": {"type": "water", "action": "delete", "date": "YYYY-MM-DD"}}
+- Change daily goal: {"message": "Water goal updated.", "log": {"type": "water", "goal": 10}}
+Default goal is 8 glasses. "I drank 3 glasses" → set glasses:3. "I had another glass" → add glasses:1.
 
 TRAINING PROGRAM:
 If the user describes a program they follow (or asks you to save one), collect: program name, which days they train, and for each day: the label (e.g. "Push Day"), exercises, sets, reps, starting weight, and how much to add each session (increment — typically 5 lbs for upper body, 10 lbs for lower body). Then save it:
@@ -2364,27 +2364,39 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
                 }
             }
         } else if (logData?.type === 'weight_log') {
-            if (logData.weight) {
-                const wLog   = loadWeightLog();
-                const today  = new Date().toISOString().split('T')[0];
-                const idx    = wLog.findIndex(e => e.date === today);
+            const wLog  = loadWeightLog();
+            const wDate = logData.date || new Date().toISOString().split('T')[0];
+            if (logData.action === 'delete') {
+                const di = wLog.findIndex(e => e.date === wDate);
+                if (di !== -1) wLog.splice(di, 1);
+            } else if (logData.weight) {
+                const idx = wLog.findIndex(e => e.date === wDate);
                 if (idx !== -1) wLog[idx].weight = logData.weight;
-                else wLog.push({ date: today, weight: logData.weight });
+                else wLog.push({ date: wDate, weight: logData.weight });
                 wLog.sort((a, b) => a.date.localeCompare(b.date));
-                localStorage.setItem('fittrack_weight_log', JSON.stringify(wLog));
-                const p = loadProfile();
-                p.weight = logData.weight;
-                localStorage.setItem('fittrack_profile', JSON.stringify(p));
-                renderProfileDisplay();
+                // keep profile weight in sync with today's entry only
+                if (wDate === new Date().toISOString().split('T')[0]) {
+                    const p = loadProfile();
+                    p.weight = logData.weight;
+                    localStorage.setItem('fittrack_profile', JSON.stringify(p));
+                    renderProfileDisplay();
+                }
             }
+            localStorage.setItem('fittrack_weight_log', JSON.stringify(wLog));
         } else if (logData?.type === 'water') {
-            if (logData.glasses !== undefined) {
-                const current = getWaterCount();
+            const wDate = logData.date || new Date().toISOString().split('T')[0];
+            const wKey  = 'fittrack_water_' + wDate;
+            const isToday = wDate === new Date().toISOString().split('T')[0];
+            if (logData.action === 'delete') {
+                localStorage.removeItem(wKey);
+                if (isToday) renderWater();
+            } else if (logData.glasses !== undefined) {
+                const current  = parseInt(localStorage.getItem(wKey)) || 0;
                 const newCount = logData.action === 'add'
                     ? Math.min(current + logData.glasses, getWaterGoal())
                     : logData.glasses;
-                localStorage.setItem(getWaterKey(), newCount);
-                renderWater();
+                localStorage.setItem(wKey, newCount);
+                if (isToday) renderWater();
             }
             if (logData.goal !== undefined) {
                 localStorage.setItem('fittrack_water_goal', logData.goal);
