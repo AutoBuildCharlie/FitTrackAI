@@ -860,6 +860,11 @@
     </div>
 </div>
 
+<!-- LIGHTBOX -->
+<div id="lightboxOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999;align-items:center;justify-content:center;padding:20px;" onclick="closeLightbox()">
+    <img id="lightboxImg" src="" style="max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;">
+</div>
+
 <!-- PROGRESS OVERLAY -->
 <div class="overlay" id="progressOverlay">
     <div class="modal" style="max-width:520px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 16px;">
@@ -918,6 +923,15 @@ function saveLog() {
 // ─────────────────────────────────────────
 //  UI HELPERS
 // ─────────────────────────────────────────
+function openLightbox(src) {
+    const el = document.getElementById('lightboxOverlay');
+    document.getElementById('lightboxImg').src = src;
+    el.style.display = 'flex';
+}
+function closeLightbox() {
+    document.getElementById('lightboxOverlay').style.display = 'none';
+}
+
 function removeEmptyState() {
     const el = document.getElementById('emptyState');
     if (el) el.remove();
@@ -1366,7 +1380,7 @@ document.getElementById('cameraInput').addEventListener('change', async (e) => {
         // Show the photo in chat as a clickable thumbnail
         const imgDiv = document.createElement('div');
         imgDiv.className = 'message user';
-        imgDiv.innerHTML = `<a href="${base64}" target="_blank"><img src="${base64}" style="max-width:220px;max-height:220px;border-radius:12px;display:block;cursor:zoom-in;"></a>`;
+        imgDiv.innerHTML = `<img src="${base64}" style="max-width:220px;max-height:220px;border-radius:12px;display:block;cursor:zoom-in;" onclick="openLightbox(this.src)">`;
         document.getElementById('messages').appendChild(imgDiv);
         scrollBottom();
 
