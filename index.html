@@ -866,10 +866,18 @@
             <button onclick="document.getElementById('journalOverlay').classList.remove('open')"
                 style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;line-height:1;">✕</button>
         </div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" id="journalDateLabel"></div>
-        <textarea id="journalNote" placeholder="How are you feeling today? Tired, energized, sore? Anything on your mind..." style="width:100%;min-height:160px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;padding:12px;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea>
-        <button onclick="saveJournal()" style="width:100%;margin-top:12px;background:var(--orange);color:#000;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;">Save Note ✓</button>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;" id="journalDateLabel"></div>
+        <textarea id="journalNote" placeholder="How are you feeling today? Tired, energized, sore? Anything on your mind..." style="width:100%;min-height:140px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;padding:12px;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+            <button onclick="saveJournal()" style="flex:1;background:var(--orange);color:#000;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;">Save Note ✓</button>
+            <div id="journalSavedMsg" style="font-size:12px;color:#4ade80;display:none;">Saved!</div>
+        </div>
 
+        <!-- Past Notes -->
+        <div style="margin-top:20px;">
+            <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Past Notes — tap to edit</div>
+            <div id="journalHistory"></div>
+        </div>
     </div>
 </div>
 
@@ -1989,21 +1997,35 @@ function saveNote(dateStr, text) {
     else localStorage.removeItem('fittrack_note_' + dateStr);
 }
 
+let journalEditDate = null;
+
 function openJournal() {
-    const today = localDateStr();
+    journalEditDate = localDateStr();
     document.getElementById('journalDateLabel').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
-    document.getElementById('journalNote').value = loadNote(today);
+    document.getElementById('journalNote').value = loadNote(journalEditDate);
+    document.getElementById('journalSavedMsg').style.display = 'none';
     renderJournalHistory();
     document.getElementById('journalOverlay').classList.add('open');
 }
 
+function journalEditPast(dateStr) {
+    journalEditDate = dateStr;
+    const d = new Date(dateStr + 'T12:00:00');
+    document.getElementById('journalDateLabel').textContent = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+    document.getElementById('journalNote').value = loadNote(dateStr);
+    document.getElementById('journalNote').focus();
+    document.getElementById('journalSavedMsg').style.display = 'none';
+}
+
 function saveJournal() {
-    const today = localDateStr();
+    const date = journalEditDate || localDateStr();
     const text = document.getElementById('journalNote').value.trim();
-    saveNote(today, text);
+    saveNote(date, text);
     renderJournalHistory();
-    document.getElementById('journalOverlay').classList.remove('open');
-    if (text) addBubble('ai', `📓 Journal note saved for today.`);
+    // Show saved confirmation, stay open
+    const msg = document.getElementById('journalSavedMsg');
+    msg.style.display = 'block';
+    setTimeout(() => msg.style.display = 'none', 2000);
 }
 
 function renderJournalHistory() {
@@ -2023,8 +2045,9 @@ function renderJournalHistory() {
     container.innerHTML = entries.slice(0, 7).map(e => {
         const d = new Date(e.dateStr + 'T12:00:00');
         const label = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-        return `<div style="background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:11px;color:var(--orange);font-weight:700;margin-bottom:4px;">${label}</div>
+        const isEditing = e.dateStr === journalEditDate;
+        return `<div onclick="journalEditPast('${e.dateStr}')" style="background:${isEditing ? 'rgba(255,107,0,0.1)' : 'var(--bg3)'};border:1px solid ${isEditing ? 'var(--orange)' : 'transparent'};border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;">
+            <div style="font-size:11px;color:var(--orange);font-weight:700;margin-bottom:4px;">${label} ${isEditing ? '✏️' : ''}</div>
             <div style="font-size:13px;color:var(--text);line-height:1.5;">${escHtml(e.text)}</div>
         </div>`;
     }).join('');
