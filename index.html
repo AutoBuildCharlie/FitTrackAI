@@ -2010,7 +2010,8 @@ MEALS (all support optional "date": "YYYY-MM-DD", defaults to today):
 - ADD macros on top (e.g. "I added a side of rice"): {"message": "Added.", "log": {"type": "edit_meal", "match": "chicken", "mode": "add", "calories": 200, "carbs": 40, "protein": 4, "fat": 1}}
 - DELETE a meal: {"message": "Removed.", "log": {"type": "delete_meal", "match": "pizza", "date": "YYYY-MM-DD"}}
 - COPY a past meal to today: {"message": "Copied.", "log": {"type": "copy_meal", "date": "YYYY-MM-DD", "match": "breakfast"}}
-Omit "match" to target the last logged meal.
+- MOVE meals from one day to today (copy + delete from original): Use copy_meal first, then delete_meal with the original date. Send both as an array: {"message": "Moved.", "log": [{"type": "copy_meal", "date": "YYYY-MM-DD", "match": "breakfast"}, {"type": "delete_meal", "date": "YYYY-MM-DD", "match": "breakfast"}]}
+Omit "match" to target the last logged meal. NEVER claim to move or delete data without using the correct log commands above.
 
 WORKOUTS (all support optional "date": "YYYY-MM-DD", defaults to today):
 - DELETE a workout: {"message": "Removed.", "log": {"type": "delete_workout", "match": "bench press", "date": "YYYY-MM-DD"}}
@@ -2171,6 +2172,16 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
         }
 
         if (displayText) addBubble('ai', displayText);
+
+        // If log is an array (e.g. move = copy + delete), process each item
+        if (Array.isArray(logData)) {
+            for (const item of logData) {
+                processLogItem(item);
+            }
+            return;
+        }
+
+        function processLogItem(logData) {
 
         if (logData?.type === 'edit_run') {
             const editDate   = logData.date || new Date().toISOString().split('T')[0];
@@ -2418,6 +2429,9 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
                 setLogForDate(dateStr, snap);
             }
         }
+        } // end processLogItem
+
+        if (logData) processLogItem(logData);
 
     } catch (err) {
         hideTyping();
