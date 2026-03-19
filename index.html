@@ -778,7 +778,7 @@
 <!-- WEEKLY VIEW OVERLAY -->
 <!-- QUICK LOG OVERLAY -->
 <div class="overlay" id="quickLogOverlay">
-    <div class="modal" style="max-width:420px;width:92%;padding:20px 16px;min-height:520px;">
+    <div class="modal" style="max-width:420px;width:92%;padding:20px 16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <div class="modal-title" style="margin-bottom:0;">＋ Quick Log</div>
             <button onclick="document.getElementById('quickLogOverlay').classList.remove('open')" style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;">✕</button>
@@ -3286,6 +3286,7 @@ function switchQLTab(tab, btn) {
     document.getElementById('qlMeal').style.display     = tab === 'meal'     ? '' : 'none';
     document.getElementById('qlStrength').style.display = tab === 'strength' ? '' : 'none';
     document.getElementById('qlRun').style.display      = tab === 'run'      ? '' : 'none';
+    document.querySelector('#quickLogOverlay .modal').style.minHeight = tab === 'strength' ? '520px' : '';
 }
 
 function saveQuickLog() {
