@@ -796,10 +796,10 @@
             <div id="qlSavedFoods" style="margin-bottom:10px;"></div>
             <input class="ql-input" id="qlMealName" placeholder="Food name (e.g. Grilled chicken)" />
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
-                <input class="ql-input" id="qlCal" placeholder="Calories" type="number" />
-                <input class="ql-input" id="qlProtein" placeholder="Protein (g)" type="number" />
-                <input class="ql-input" id="qlCarbs" placeholder="Carbs (g)" type="number" />
-                <input class="ql-input" id="qlFat" placeholder="Fat (g)" type="number" />
+                <input class="ql-input" id="qlCal" placeholder="Calories (auto)" type="number" />
+                <input class="ql-input" id="qlProtein" placeholder="Protein (g)" type="number" oninput="qlAutoCalc()" />
+                <input class="ql-input" id="qlCarbs" placeholder="Carbs (g)" type="number" oninput="qlAutoCalc()" />
+                <input class="ql-input" id="qlFat" placeholder="Fat (g)" type="number" oninput="qlAutoCalc()" />
             </div>
         </div>
 
@@ -3296,6 +3296,15 @@ document.addEventListener('click', e => {
         list.style.display = 'none';
     }
 });
+
+function qlAutoCalc() {
+    const p = parseFloat(document.getElementById('qlProtein').value) || 0;
+    const c = parseFloat(document.getElementById('qlCarbs').value)   || 0;
+    const f = parseFloat(document.getElementById('qlFat').value)     || 0;
+    if (p || c || f) {
+        document.getElementById('qlCal').value = Math.round(p * 4 + c * 4 + f * 9);
+    }
+}
 
 function renderQLSavedFoods() {
     const foods = loadFoodLibrary();
