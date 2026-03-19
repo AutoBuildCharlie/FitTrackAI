@@ -968,8 +968,15 @@ let pendingMealScan = null; // holds per-serving data while waiting for serving 
 // ─────────────────────────────────────────
 //  DATA
 // ─────────────────────────────────────────
+function localDateStr(date) {
+    date = date || new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
 function todayKey() {
-    return 'fittrack_' + new Date().toISOString().split('T')[0];
+    return 'fittrack_' + localDateStr();
 }
 
 function dateKey(dateStr) {
@@ -977,14 +984,14 @@ function dateKey(dateStr) {
 }
 
 function getLogForDate(dateStr) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     if (!dateStr || dateStr === today) return todayLog;
     const raw = localStorage.getItem(dateKey(dateStr));
     return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
 }
 
 function setLogForDate(dateStr, log) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     if (!dateStr || dateStr === today) {
         todayLog.workouts = log.workouts;
         todayLog.meals    = log.meals;
@@ -1310,7 +1317,7 @@ function getStreak() {
     for (let i = 0; i < 365; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        const key = 'fittrack_' + d.toISOString().split('T')[0];
+        const key = 'fittrack_' + localDateStr(d);
         const raw = localStorage.getItem(key);
         if (!raw) break;
         const log = JSON.parse(raw);
@@ -1331,7 +1338,7 @@ function renderStreak() {
 //  WATER TRACKING
 // ─────────────────────────────────────────
 function getWaterKey() {
-    return 'fittrack_water_' + new Date().toISOString().split('T')[0];
+    return 'fittrack_water_' + localDateStr();
 }
 
 function getWaterGoal() {
@@ -1454,11 +1461,11 @@ function getWeekDates() {
 function renderWeeklyView() {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dates = getWeekDates();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDateStr();
     let html = '';
 
     dates.forEach((date, i) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = localDateStr(date);
         const key = 'fittrack_' + dateStr;
         const raw = localStorage.getItem(key);
         const log = raw ? JSON.parse(raw) : { workouts: [], meals: [] };
@@ -1533,7 +1540,7 @@ function resetAllData() {
     if (!confirm('Reset ALL workout and meal data? This cannot be undone.')) return;
     const dates = getWeekDates();
     dates.forEach(date => {
-        const key = 'fittrack_' + date.toISOString().split('T')[0];
+        const key = 'fittrack_' + localDateStr(date);
         localStorage.removeItem(key);
     });
     todayLog = { workouts: [], meals: [] };
@@ -2081,7 +2088,7 @@ async function askClaude(userMessage) {
         const weekDates = getWeekDates ? getWeekDates() : [];
         const recentMuscles = [];
         weekDates.forEach(d => {
-            const key = 'fittrack_' + d.toISOString().split('T')[0];
+            const key = 'fittrack_' + localDateStr(d);
             const raw = localStorage.getItem(key);
             if (raw) {
                 const log = JSON.parse(raw);
@@ -2100,7 +2107,7 @@ async function askClaude(userMessage) {
             calories: a.calories + m.calories, protein: a.protein + m.protein,
             carbs: a.carbs + m.carbs, fat: a.fat + m.fat
         }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-        const macroContext = `\n\nToday's remaining macros: ${goals.calories - todayTotals.calories} cal, ${goals.protein - todayTotals.protein}g protein, ${goals.carbs - todayTotals.carbs}g carbs, ${goals.fat - todayTotals.fat}g fat left.`;
+        const macroContext = `\n\nToday's date: ${localDateStr()}.\n\nToday's remaining macros: ${goals.calories - todayTotals.calories} cal, ${goals.protein - todayTotals.protein}g protein, ${goals.carbs - todayTotals.carbs}g carbs, ${goals.fat - todayTotals.fat}g fat left.`;
 
         const aiName = loadAiName();
         const nameContext = aiName
@@ -2184,7 +2191,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
         function processLogItem(logData) {
 
         if (logData?.type === 'edit_run') {
-            const editDate   = logData.date || new Date().toISOString().split('T')[0];
+            const editDate   = logData.date || localDateStr();
             const editWeight = parseFloat(loadProfile().weight) || 185;
             pushUndo(editDate);
             const dayLog = getLogForDate(editDate);
@@ -2200,7 +2207,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             }
             setLogForDate(editDate, dayLog);
         } else if (logData?.type === 'delete_run') {
-            const targetDate = logData.date || new Date().toISOString().split('T')[0];
+            const targetDate = logData.date || localDateStr();
             pushUndo(targetDate);
             const dayLog = getLogForDate(targetDate);
             dayLog.workouts = (dayLog.workouts || []).filter(w => w.type !== 'run');
@@ -2212,7 +2219,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             } else if (target === 'meals') {
                 todayLog.meals = [];
             } else if (target === 'week') {
-                getWeekDates().forEach(d => localStorage.removeItem('fittrack_' + d.toISOString().split('T')[0]));
+                getWeekDates().forEach(d => localStorage.removeItem('fittrack_' + localDateStr(d)));
                 todayLog = { workouts: [], meals: [] };
             } else {
                 todayLog = { workouts: [], meals: [] };
@@ -2296,7 +2303,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             saveLog();
             renderStreak();
         } else if (logData?.type === 'edit_meal') {
-            const emDate = logData.date || new Date().toISOString().split('T')[0];
+            const emDate = logData.date || localDateStr();
             pushUndo(emDate);
             const emLog = getLogForDate(emDate);
             if (emLog.meals && emLog.meals.length > 0) {
@@ -2312,7 +2319,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
                 setLogForDate(emDate, emLog);
             }
         } else if (logData?.type === 'delete_meal') {
-            const dmDate = logData.date || new Date().toISOString().split('T')[0];
+            const dmDate = logData.date || localDateStr();
             pushUndo(dmDate);
             const dmLog = getLogForDate(dmDate);
             const kw = (logData.match || '').toLowerCase();
@@ -2322,7 +2329,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             if (idx !== -1) (dmLog.meals || []).splice(idx, 1);
             setLogForDate(dmDate, dmLog);
         } else if (logData?.type === 'delete_workout') {
-            const dwDate = logData.date || new Date().toISOString().split('T')[0];
+            const dwDate = logData.date || localDateStr();
             pushUndo(dwDate);
             const dwLog = getLogForDate(dwDate);
             const kw = (logData.match || '').toLowerCase();
@@ -2332,7 +2339,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             if (idx !== -1) (dwLog.workouts || []).splice(idx, 1);
             setLogForDate(dwDate, dwLog);
         } else if (logData?.type === 'edit_workout') {
-            const ewDate = logData.date || new Date().toISOString().split('T')[0];
+            const ewDate = logData.date || localDateStr();
             pushUndo(ewDate);
             const ewLog = getLogForDate(ewDate);
             if (ewLog.workouts && ewLog.workouts.length > 0) {
@@ -2384,7 +2391,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             }
         } else if (logData?.type === 'weight_log') {
             const wLog  = loadWeightLog();
-            const wDate = logData.date || new Date().toISOString().split('T')[0];
+            const wDate = logData.date || localDateStr();
             if (logData.action === 'delete') {
                 const di = wLog.findIndex(e => e.date === wDate);
                 if (di !== -1) wLog.splice(di, 1);
@@ -2394,7 +2401,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
                 else wLog.push({ date: wDate, weight: logData.weight });
                 wLog.sort((a, b) => a.date.localeCompare(b.date));
                 // keep profile weight in sync with today's entry only
-                if (wDate === new Date().toISOString().split('T')[0]) {
+                if (wDate === localDateStr()) {
                     const p = loadProfile();
                     p.weight = logData.weight;
                     localStorage.setItem('fittrack_profile', JSON.stringify(p));
@@ -2403,9 +2410,9 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             }
             localStorage.setItem('fittrack_weight_log', JSON.stringify(wLog));
         } else if (logData?.type === 'water') {
-            const wDate = logData.date || new Date().toISOString().split('T')[0];
+            const wDate = logData.date || localDateStr();
             const wKey  = 'fittrack_water_' + wDate;
-            const isToday = wDate === new Date().toISOString().split('T')[0];
+            const isToday = wDate === localDateStr();
             if (logData.action === 'delete') {
                 localStorage.removeItem(wKey);
                 if (isToday) renderWater();
@@ -2545,7 +2552,7 @@ function logBodyweight() {
     const w = parseFloat(input.value);
     if (!w) return;
     const log  = loadWeightLog();
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     const existing = log.findIndex(e => e.date === today);
     if (existing !== -1) log[existing].weight = w;
     else log.push({ date: today, weight: w });
@@ -2632,11 +2639,11 @@ function getAllLogs() {
     for (let i = 0; i < 90; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const key = 'fittrack_' + d.toISOString().split('T')[0];
+        const key = 'fittrack_' + localDateStr(d);
         const raw = localStorage.getItem(key);
         if (raw) {
             const log = JSON.parse(raw);
-            log._date = d.toISOString().split('T')[0];
+            log._date = localDateStr(d);
             logs.push(log);
         }
     }
