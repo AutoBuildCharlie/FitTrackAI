@@ -1660,25 +1660,39 @@ function renderWeeklyView() {
     });
 
     // Weekly totals
-    let wCal = 0, wProt = 0, wCarbs = 0, wFat = 0, wWorkouts = 0, wMiles = 0;
+    let wCal = 0, wProt = 0, wCarbs = 0, wFat = 0, wWorkouts = 0, wMiles = 0, wMealDays = 0, wRestDays = 0;
     dates.forEach(date => {
         const raw = localStorage.getItem('fittrack_' + localDateStr(date));
-        if (!raw) return;
+        if (!raw) { wRestDays++; return; }
         const log = JSON.parse(raw);
-        (log.meals || []).forEach(m => { wCal += m.calories||0; wProt += m.protein||0; wCarbs += m.carbs||0; wFat += m.fat||0; });
-        (log.workouts || []).forEach(w => { wWorkouts++; wMiles += w.distance||0; });
+        const hasMeals = (log.meals || []).length > 0;
+        const hasWorkouts = (log.workouts || []).length > 0;
+        if (hasMeals) {
+            wMealDays++;
+            (log.meals || []).forEach(m => { wCal += m.calories||0; wProt += m.protein||0; wCarbs += m.carbs||0; wFat += m.fat||0; });
+        }
+        if (hasWorkouts) {
+            (log.workouts || []).forEach(w => { wWorkouts++; wMiles += w.distance||0; });
+        } else if (!hasMeals) {
+            wRestDays++;
+        }
     });
+
+    const avgCal   = wMealDays > 0 ? Math.round(wCal / wMealDays)   : 0;
+    const avgProt  = wMealDays > 0 ? Math.round(wProt / wMealDays)  : 0;
+    const avgCarbs = wMealDays > 0 ? Math.round(wCarbs / wMealDays) : 0;
+    const avgFat   = wMealDays > 0 ? Math.round(wFat / wMealDays)   : 0;
 
     if (wCal > 0 || wWorkouts > 0) {
         html += `<div style="margin-top:6px;border:1px solid rgba(255,107,0,0.3);border-radius:12px;padding:14px;background:rgba(255,107,0,0.05);">
             <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:10px;">📊 Week Summary</div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
-                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wCal.toLocaleString()}</div><div style="font-size:10px;color:var(--text-dim);">Total Cal</div></div>
-                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wProt}g</div><div style="font-size:10px;color:var(--text-dim);">Total Protein</div></div>
-                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${Math.round(wCal/7)}</div><div style="font-size:10px;color:var(--text-dim);">Avg Cal/Day</div></div>
-                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wWorkouts}</div><div style="font-size:10px;color:var(--text-dim);">Workouts</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${avgCal.toLocaleString()}</div><div style="font-size:10px;color:var(--text-dim);">Avg Cal/Day</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${avgProt}g</div><div style="font-size:10px;color:var(--text-dim);">Avg Protein/Day</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${avgCarbs}g</div><div style="font-size:10px;color:var(--text-dim);">Avg Carbs/Day</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${avgFat}g</div><div style="font-size:10px;color:var(--text-dim);">Avg Fat/Day</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wRestDays}</div><div style="font-size:10px;color:var(--text-dim);">Rest Days</div></div>
                 ${wMiles > 0 ? `<div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wMiles.toFixed(1)}</div><div style="font-size:10px;color:var(--text-dim);">Miles Run</div></div>` : ''}
-                <div><div style="font-size:16px;font-weight:700;color:var(--orange);">${wCarbs}g</div><div style="font-size:10px;color:var(--text-dim);">Total Carbs</div></div>
             </div>
         </div>`;
     }
