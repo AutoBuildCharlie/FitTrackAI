@@ -1293,6 +1293,38 @@ function loadPRs() {
     return raw ? JSON.parse(raw) : {};
 }
 
+// Run PR distances in miles
+const RUN_PR_DISTANCES = [
+    { key: '1mile',        label: '1 Mile',         miles: 1.0,    tol: 0.1  },
+    { key: '5k',           label: '5K',              miles: 3.107,  tol: 0.15 },
+    { key: '10k',          label: '10K',             miles: 6.214,  tol: 0.2  },
+    { key: 'half_marathon',label: 'Half Marathon',   miles: 13.109, tol: 0.3  },
+    { key: 'full_marathon',label: 'Full Marathon',   miles: 26.219, tol: 0.5  },
+];
+
+function loadRunPRs() {
+    const raw = localStorage.getItem('fittrack_run_prs');
+    return raw ? JSON.parse(raw) : {};
+}
+
+function checkRunPR(distance, duration) {
+    if (!distance || !duration) return null;
+    const match = RUN_PR_DISTANCES.find(d => Math.abs(distance - d.miles) <= d.tol);
+    if (!match) return null;
+    const prs = loadRunPRs();
+    const prev = prs[match.key];
+    if (!prev || duration < prev.duration) {
+        prs[match.key] = { duration, date: localDateStr() };
+        localStorage.setItem('fittrack_run_prs', JSON.stringify(prs));
+        const mins = Math.floor(duration);
+        const secs = Math.round((duration % 1) * 60);
+        const timeStr = `${mins}:${secs.toString().padStart(2,'0')}`;
+        const prevStr = prev ? (() => { const pm = Math.floor(prev.duration); const ps = Math.round((prev.duration%1)*60); return `${pm}:${ps.toString().padStart(2,'0')}`; })() : null;
+        return { label: match.label, timeStr, prevStr, isFirst: !prev };
+    }
+    return null;
+}
+
 function checkPersonalRecord(logData) {
     if (!logData.exercises || !logData.weight) return;
     const prs = loadPRs();
@@ -2195,6 +2227,11 @@ async function askClaude(userMessage) {
             ? `\n\nRUN HISTORY (most recent first, up to 10):\n${allRuns.slice(0,10).map(r => `- ${r.date}: ${r.distance} miles${r.duration ? ' in '+r.duration+'min' : ''}${r.pace ? ' @ '+r.pace+'/mi' : ''}${r.calories ? ', '+r.calories+' cal burned' : ''}`).join('\n')}\nBest run: ${allRuns.reduce((b,r) => r.distance > b.distance ? r : b, allRuns[0]).distance} miles on ${allRuns.reduce((b,r) => r.distance > b.distance ? r : b, allRuns[0]).date}.`
             : '';
 
+        const runPRData = loadRunPRs();
+        const runPRContext = Object.keys(runPRData).length > 0
+            ? `\n\nRACE PRs (best times):\n${RUN_PR_DISTANCES.filter(d => runPRData[d.key]).map(d => { const pr = runPRData[d.key]; const mins = Math.floor(pr.duration); const secs = Math.round((pr.duration%1)*60); return `- ${d.label}: ${mins}:${secs.toString().padStart(2,'0')} (set on ${pr.date})`; }).join('\n')}`
+            : '';
+
         // Inject today's remaining macros
         const goals = loadGoals();
         const todayTotals = todayLog.meals.reduce((a, m) => ({
@@ -2230,7 +2267,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
         }
 
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + macroContext + nameContext + programContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + nameContext + programContext },
             ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
         ];
 
@@ -2383,7 +2420,15 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
             });
             saveLog();
             renderStreak();
-            renderMacroBar(); // updates the 🔥 cal burned display only — food macros unchanged
+            renderMacroBar();
+            // Check for run PR
+            const runPR = checkRunPR(logData.distance, logData.duration);
+            if (runPR) {
+                const msg = runPR.isFirst
+                    ? `🏆 First ${runPR.label} on record — ${runPR.timeStr}! That's your new PR. Let's see you beat it next time! 🔥`
+                    : `🏆 NEW ${runPR.label} PR! ${runPR.timeStr} — you just beat your previous best of ${runPR.prevStr}! Absolute beast. 🔥`;
+                addBubble('ai', msg);
+            }
         } else if (logData?.type === 'meal') {
             addMealCard(logData);
             todayLog.meals.push({
@@ -2900,7 +2945,30 @@ function renderRunningChart() {
             <div><div style="font-size:20px;font-weight:800;color:var(--orange);">${longestRun}</div><div style="font-size:11px;color:var(--text-dim);">Longest Run</div></div>
             <div><div style="font-size:20px;font-weight:800;color:var(--orange);">${totalCal}</div><div style="font-size:11px;color:var(--text-dim);">Cal Burned</div></div>
             ${avgHR ? `<div><div style="font-size:20px;font-weight:800;color:var(--orange);">${avgHR}</div><div style="font-size:11px;color:var(--text-dim);">Avg HR</div></div>` : ''}
-        </div>`;
+        </div>
+        ${(() => {
+            const runPRs = loadRunPRs();
+            const prEntries = RUN_PR_DISTANCES.filter(d => runPRs[d.key]);
+            if (!prEntries.length) return '';
+            return `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+                <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">🏆 Race PRs</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                ${prEntries.map(d => {
+                    const pr = runPRs[d.key];
+                    const mins = Math.floor(pr.duration);
+                    const secs = Math.round((pr.duration % 1) * 60);
+                    const timeStr = `${mins}:${secs.toString().padStart(2,'0')}`;
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,107,0,0.07);border-radius:8px;padding:8px 12px;">
+                        <span style="font-size:13px;font-weight:700;">${d.label}</span>
+                        <div style="text-align:right;">
+                            <div style="font-size:14px;font-weight:800;color:var(--orange);">${timeStr}</div>
+                            <div style="font-size:10px;color:var(--text-dim);">${pr.date}</div>
+                        </div>
+                    </div>`;
+                }).join('')}
+                </div>
+            </div>`;
+        })()}`;
 }
 
 document.getElementById('summaryBtn').addEventListener('click', () => {
