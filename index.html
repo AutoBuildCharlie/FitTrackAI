@@ -2129,7 +2129,7 @@ Today is ${dayName}. ${todayDay ? `Today is ${todayDay.label}. When the user ask
 
         const messages = [
             { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + macroContext + nameContext + programContext },
-            ...history.map(m => ({ role: m.role, content: m.content }))
+            ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
         ];
 
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
