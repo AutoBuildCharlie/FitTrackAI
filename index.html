@@ -805,13 +805,24 @@
 
         <!-- STRENGTH FORM -->
         <div id="qlStrength" style="display:none;">
-            <input class="ql-input" id="qlExercise" placeholder="Exercise (e.g. Bench Press)" />
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
+            <!-- 1. Muscle Groups -->
+            <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Muscle Groups</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;" id="qlMuscleChips"></div>
+            <input class="ql-input" id="qlMuscles" placeholder="Or type muscle groups..." style="margin-bottom:10px;" oninput="qlMuscleTyped()" />
+
+            <!-- 2. Exercise -->
+            <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Exercise</div>
+            <div style="position:relative;">
+                <input class="ql-input" id="qlExercise" placeholder="Select or type exercise..." onfocus="qlShowExercises()" oninput="qlFilterExercises()" autocomplete="off" />
+                <div id="qlExerciseList" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--orange);border-radius:10px;max-height:160px;overflow-y:auto;z-index:100;margin-top:4px;"></div>
+            </div>
+
+            <!-- 3. Sets / Reps / Weight -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;">
                 <input class="ql-input" id="qlSets" placeholder="Sets" type="number" />
                 <input class="ql-input" id="qlReps" placeholder="Reps" type="number" />
                 <input class="ql-input" id="qlWeight" placeholder="Weight (lbs)" type="number" />
             </div>
-            <input class="ql-input" id="qlMuscles" placeholder="Muscle groups (e.g. chest, triceps)" style="margin-top:8px;" />
         </div>
 
         <!-- RUN FORM -->
@@ -3057,10 +3068,92 @@ let qlCurrentTab = 'meal';
 
 document.getElementById('quickLogBtn').addEventListener('click', () => {
     renderQLSavedFoods();
+    qlSelectedMuscles = [];
+    qlRenderMuscleChips();
     document.getElementById('quickLogOverlay').classList.add('open');
 });
 document.getElementById('quickLogOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// ── STRENGTH QUICK LOG — MUSCLE & EXERCISE PICKERS ──────────
+const QL_MUSCLES = {
+    'Chest':     ['Bench Press','Incline Bench Press','Decline Bench Press','Dumbbell Fly','Cable Fly','Push-Up','Chest Dips','Chest Press Machine','Pec Deck'],
+    'Back':      ['Pull-Up','Chin-Up','Lat Pulldown','Barbell Row','Dumbbell Row','Cable Row','T-Bar Row','Deadlift','Face Pull','Straight Arm Pulldown','Seated Cable Row'],
+    'Shoulders': ['Overhead Press','Dumbbell Shoulder Press','Lateral Raise','Front Raise','Rear Delt Fly','Arnold Press','Shrugs','Cable Lateral Raise','Machine Shoulder Press'],
+    'Biceps':    ['Barbell Curl','Dumbbell Curl','Hammer Curl','Preacher Curl','Cable Curl','Concentration Curl','Incline Curl','EZ Bar Curl'],
+    'Triceps':   ['Tricep Pushdown','Skull Crusher','Close-Grip Bench Press','Overhead Tricep Extension','Tricep Dips','Cable Kickback','Diamond Push-Up'],
+    'Legs':      ['Squat','Leg Press','Romanian Deadlift','Leg Curl','Leg Extension','Lunges','Bulgarian Split Squat','Hack Squat','Sumo Squat','Step-Up','Calf Raise'],
+    'Glutes':    ['Hip Thrust','Glute Bridge','Cable Kickback','Bulgarian Split Squat','Sumo Deadlift','Donkey Kick','Resistance Band Walk'],
+    'Core':      ['Plank','Crunch','Sit-Up','Russian Twist','Leg Raise','Cable Crunch','Ab Rollout','Hanging Knee Raise','Bicycle Crunch','Hyperextension','Cable Crunches'],
+    'Full Body': ['Deadlift','Burpees','Kettlebell Swing','Clean and Press','Farmers Carry','Box Jump','Battle Ropes','Thruster'],
+};
+
+let qlSelectedMuscles = [];
+
+function qlRenderMuscleChips() {
+    const container = document.getElementById('qlMuscleChips');
+    container.innerHTML = Object.keys(QL_MUSCLES).map(m => {
+        const active = qlSelectedMuscles.includes(m);
+        return `<button type="button" onclick="qlToggleMuscle('${m}')" style="padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${active ? 'var(--orange)' : 'var(--border)'};background:${active ? 'rgba(255,107,0,0.18)' : 'var(--bg3)'};color:${active ? 'var(--orange)' : 'var(--text-dim)'};">${m}</button>`;
+    }).join('');
+}
+
+function qlToggleMuscle(m) {
+    const idx = qlSelectedMuscles.indexOf(m);
+    if (idx >= 0) qlSelectedMuscles.splice(idx, 1);
+    else qlSelectedMuscles.push(m);
+    qlRenderMuscleChips();
+    // Update the text input to reflect selection
+    document.getElementById('qlMuscles').value = qlSelectedMuscles.join(', ');
+    // Refresh exercise list if open
+    const list = document.getElementById('qlExerciseList');
+    if (list.style.display !== 'none') qlShowExercises();
+}
+
+function qlMuscleTyped() {
+    // If user types manually, clear chip selection
+    qlSelectedMuscles = [];
+    qlRenderMuscleChips();
+}
+
+function qlGetExercisesForSelected() {
+    if (!qlSelectedMuscles.length) {
+        // Return all exercises flat
+        return Object.values(QL_MUSCLES).flat();
+    }
+    const exSet = new Set();
+    qlSelectedMuscles.forEach(m => (QL_MUSCLES[m] || []).forEach(e => exSet.add(e)));
+    return [...exSet].sort();
+}
+
+function qlShowExercises() {
+    const filter = document.getElementById('qlExercise').value.toLowerCase();
+    let exercises = qlGetExercisesForSelected();
+    if (filter) exercises = exercises.filter(e => e.toLowerCase().includes(filter));
+    const list = document.getElementById('qlExerciseList');
+    if (!exercises.length) { list.style.display = 'none'; return; }
+    list.style.display = 'block';
+    list.innerHTML = exercises.map(e =>
+        `<div onclick="qlPickExercise('${e.replace(/'/g,"\\'")}')\" style="padding:10px 14px;font-size:13px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);" onmouseover="this.style.background='rgba(255,107,0,0.1)'" onmouseout="this.style.background=''">${e}</div>`
+    ).join('');
+}
+
+function qlFilterExercises() {
+    qlShowExercises();
+}
+
+function qlPickExercise(name) {
+    document.getElementById('qlExercise').value = name;
+    document.getElementById('qlExerciseList').style.display = 'none';
+}
+
+// Close exercise list when tapping outside
+document.addEventListener('click', e => {
+    const list = document.getElementById('qlExerciseList');
+    if (list && !list.contains(e.target) && e.target.id !== 'qlExercise') {
+        list.style.display = 'none';
+    }
 });
 
 function renderQLSavedFoods() {
@@ -3084,6 +3177,7 @@ function qlFillFood(i) {
 }
 
 function switchQLTab(tab, btn) {
+    if (tab === 'strength') { qlSelectedMuscles = []; qlRenderMuscleChips(); }
     qlCurrentTab = tab;
     document.querySelectorAll('.ql-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
