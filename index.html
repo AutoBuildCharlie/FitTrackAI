@@ -1589,9 +1589,7 @@ function renderWeeklyView() {
                 </div>
             </div>`;
 
-        if (!hasData) {
-            html += `<div style="padding:10px 14px;font-size:13px;color:var(--text-dim);">No data logged</div>`;
-        } else {
+        if (hasData) {
             html += `<div style="padding:10px 14px;">`;
 
             if (log.workouts.length > 0) {
@@ -1630,7 +1628,21 @@ function renderWeeklyView() {
                 </div>`;
             }
 
+            // Note for the day
+            const dayNote = loadNote(dateStr);
+            if (dayNote) {
+                html += `<div style="padding:0 14px 10px;"><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px;">📓 Note</div><div style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;">"${escHtml(dayNote)}"</div></div>`;
+            }
+
             html += `</div>`;
+        } else {
+            // No workout/meal data — still show note if exists
+            const dayNote = loadNote(dateStr);
+            if (dayNote) {
+                html += `<div style="padding:10px 14px;"><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px;">📓 Note</div><div style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;">"${escHtml(dayNote)}"</div></div>`;
+            } else {
+                html += `<div style="padding:10px 14px;font-size:13px;color:var(--text-dim);">No data logged</div>`;
+            }
         }
 
         html += `</div>`;
@@ -3249,52 +3261,67 @@ function switchLogTab(tab) {
 }
 
 function renderMonthlyView() {
+    // Build map: month → { dateStr → { workouts, note } }
     const monthMap = {};
     for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || !k.startsWith('fittrack_2')) continue;
-        const dateStr = k.replace('fittrack_', '');
-        const month = dateStr.slice(0, 7); // YYYY-MM
-        try {
-            const log = JSON.parse(localStorage.getItem(k));
-            if (!monthMap[month]) monthMap[month] = [];
-            (log.workouts || []).forEach(w => monthMap[month].push({ dateStr, ...w }));
-        } catch(_) {}
+        if (!k) continue;
+        if (k.startsWith('fittrack_2') && !k.startsWith('fittrack_note_')) {
+            const dateStr = k.replace('fittrack_', '');
+            const month = dateStr.slice(0, 7);
+            try {
+                const log = JSON.parse(localStorage.getItem(k));
+                if (!monthMap[month]) monthMap[month] = {};
+                if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], note: '' };
+                (log.workouts || []).forEach(w => monthMap[month][dateStr].workouts.push(w));
+            } catch(_) {}
+        }
+        if (k.startsWith('fittrack_note_')) {
+            const dateStr = k.replace('fittrack_note_', '');
+            const month = dateStr.slice(0, 7);
+            if (!monthMap[month]) monthMap[month] = {};
+            if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], note: '' };
+            monthMap[month][dateStr].note = localStorage.getItem(k) || '';
+        }
     }
 
     const months = Object.keys(monthMap).sort((a,b) => b.localeCompare(a));
-    if (!months.length) { document.getElementById('monthlyContent').innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px;">No workout history yet.</p>'; return; }
+    if (!months.length) { document.getElementById('monthlyContent').innerHTML = '<p style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px;">No data yet.</p>'; return; }
 
     const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     let html = '';
     months.forEach(m => {
         const [year, mo] = m.split('-');
         const label = `${monthNames[parseInt(mo)-1]} ${year}`;
-        const workouts = monthMap[m].sort((a,b) => b.dateStr.localeCompare(a.dateStr));
+        const dateEntries = Object.entries(monthMap[m]).sort((a,b) => b[0].localeCompare(a[0]));
+        const totalWorkouts = dateEntries.reduce((t,[,v]) => t + v.workouts.length, 0);
         html += `<div style="margin-bottom:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div style="font-size:14px;font-weight:800;color:var(--orange);">${label}</div>
-                <div style="font-size:11px;color:var(--text-dim);">${workouts.length} workout${workouts.length !== 1 ? 's' : ''}</div>
+                <div style="font-size:11px;color:var(--text-dim);">${totalWorkouts} workout${totalWorkouts !== 1 ? 's' : ''}</div>
             </div>`;
-        workouts.forEach(w => {
-            const d = new Date(w.dateStr + 'T12:00:00');
+        dateEntries.forEach(([dateStr, data]) => {
+            const d = new Date(dateStr + 'T12:00:00');
             const dayName = d.toLocaleDateString('en-US', { weekday:'short' });
             const dayNum  = d.getDate();
-            const setsReps = (w.sets && w.reps) ? `${w.sets}x${w.reps}${w.weight ? ' @ ' + w.weight + 'lbs' : ''}` : '';
-            const muscles = (w.muscleGroups || []).slice(0,3).join(', ');
-            const isRun = w.type === 'run';
             html += `<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);">
-                <div style="min-width:36px;text-align:center;background:rgba(255,107,0,0.1);border-radius:8px;padding:6px 4px;">
+                <div style="min-width:36px;text-align:center;background:rgba(255,107,0,0.1);border-radius:8px;padding:6px 4px;flex-shrink:0;">
                     <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">${dayName}</div>
                     <div style="font-size:16px;font-weight:800;color:var(--orange);">${dayNum}</div>
                 </div>
-                <div style="flex:1;">
-                    <div style="font-size:13px;font-weight:700;">${escHtml(w.summary)}</div>
-                    ${setsReps ? `<div style="font-size:11px;color:var(--orange);margin-top:2px;">${setsReps}</div>` : ''}
-                    ${muscles && !isRun ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${muscles}</div>` : ''}
-                    ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}</div>` : ''}
-                </div>
-            </div>`;
+                <div style="flex:1;">`;
+            data.workouts.forEach(w => {
+                const setsReps = (w.sets && w.reps) ? `${w.sets}x${w.reps}${w.weight ? ' @ ' + w.weight + 'lbs' : ''}` : '';
+                const muscles = (w.muscleGroups || []).slice(0,3).join(', ');
+                const isRun = w.type === 'run';
+                html += `<div style="font-size:13px;font-weight:700;margin-bottom:1px;">${escHtml(w.summary)}</div>
+                    ${setsReps ? `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;">${setsReps}</div>` : ''}
+                    ${muscles && !isRun ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${muscles}</div>` : ''}
+                    ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}</div>` : ''}`;
+            });
+            if (!data.workouts.length) html += `<div style="font-size:12px;color:var(--text-dim);">Rest day</div>`;
+            if (data.note) html += `<div style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:4px;">📓 "${escHtml(data.note)}"</div>`;
+            html += `</div></div>`;
         });
         html += `</div>`;
     });
