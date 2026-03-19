@@ -529,7 +529,12 @@
             max-height: 88vh;
             overflow-y: auto;
             box-shadow: 0 0 50px var(--orange-glow), 0 20px 60px rgba(0,0,0,0.6);
+            scrollbar-width: thin;
+            scrollbar-color: var(--orange-dim) transparent;
         }
+        .modal::-webkit-scrollbar { width: 5px; }
+        .modal::-webkit-scrollbar-track { background: transparent; }
+        .modal::-webkit-scrollbar-thumb { background: var(--orange-dim); border-radius: 10px; }
 
         .modal-title {
             font-size: 20px;
