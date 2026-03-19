@@ -3204,17 +3204,23 @@ function qlGetExercisesForSelected() {
     return [...exSet];
 }
 
+function qlSetModalHeight(tall) {
+    document.querySelector('#quickLogOverlay .modal').style.minHeight = tall ? '720px' : '520px';
+}
+
 function qlShowExercises() {
     const list = document.getElementById('qlExerciseList');
     if (!qlSelectedMuscles.length) {
         list.style.display = 'none';
+        qlSetModalHeight(false);
         return;
     }
     const filter = document.getElementById('qlExercise').value.toLowerCase();
     let exercises = qlGetExercisesForSelected();
     if (filter) exercises = exercises.filter(e => e.toLowerCase().includes(filter));
-    if (!exercises.length) { list.style.display = 'none'; return; }
+    if (!exercises.length) { list.style.display = 'none'; qlSetModalHeight(false); return; }
     list.style.display = 'block';
+    qlSetModalHeight(true);
     list.innerHTML = exercises.map(e =>
         `<div onclick="qlPickExercise('${e.replace(/'/g,"\\'")}')\" style="padding:14px 16px;font-size:15px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);" onmouseover="this.style.background='rgba(255,107,0,0.1)'" onmouseout="this.style.background=''">${e}</div>`
     ).join('');
@@ -3227,6 +3233,7 @@ function qlFilterExercises() {
 function qlPickExercise(name) {
     document.getElementById('qlExercise').value = name;
     document.getElementById('qlExerciseList').style.display = 'none';
+    qlSetModalHeight(false);
 }
 
 // Close exercise list when tapping outside
@@ -3234,6 +3241,7 @@ document.addEventListener('click', e => {
     const list = document.getElementById('qlExerciseList');
     if (list && !list.contains(e.target) && e.target.id !== 'qlExercise') {
         list.style.display = 'none';
+        qlSetModalHeight(false);
     }
 });
 
