@@ -3390,9 +3390,8 @@ function renderQLRecentMeals() {
             ${meals.map((m, i) => `
                 <button onclick="qlLoadRecentMeal(${i})"
                     style="background:#1a1a1a;border:1px solid var(--border);border-radius:8px;padding:10px 12px;
-                           text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;box-sizing:border-box;">
+                           text-align:left;cursor:pointer;width:100%;box-sizing:border-box;">
                     <span style="font-size:13px;color:var(--text);font-weight:600;">${escHtml(m.summary)}</span>
-                    <span style="font-size:11px;color:var(--text-dim);white-space:nowrap;margin-left:8px;">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</span>
                 </button>`).join('')}
         </div>`;
 }
