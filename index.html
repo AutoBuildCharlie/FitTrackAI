@@ -3362,7 +3362,23 @@ let qlRecentMealData = [];
 function renderQLRecentMeals() {
     const container = document.getElementById('qlRecentMeals');
     if (!container) return;
-    const meals = [...(todayLog.meals || [])].reverse().slice(0, 10);
+    // Gather meals from all days, most recent date first
+    const allMeals = [];
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('fittrack_2')) keys.push(k);
+    }
+    keys.sort((a, b) => b.localeCompare(a)); // newest date first
+    for (const k of keys) {
+        try {
+            const log = JSON.parse(localStorage.getItem(k));
+            const dayMeals = [...(log.meals || [])].reverse(); // most recent meal in day first
+            allMeals.push(...dayMeals);
+            if (allMeals.length >= 10) break;
+        } catch(_) {}
+    }
+    const meals = allMeals.slice(0, 10);
     qlRecentMealData = meals;
     if (!meals.length) { container.innerHTML = ''; return; }
     container.innerHTML = `
