@@ -1143,7 +1143,7 @@ async function handleAuth() {
 async function signInWithGoogle() {
     await _supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.href }
+        options: { redirectTo: 'https://autobuildcharlie.github.io/FitTrackAI/' }
     });
 }
 
