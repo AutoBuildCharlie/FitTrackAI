@@ -15,6 +15,7 @@
 
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -992,6 +993,23 @@
         <div id="macroPreview" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;text-align:center;"></div>
         </div><!-- end settingsFullSection -->
         <button class="modal-btn" onclick="saveSettings()">Save &amp; Start</button>
+        <button onclick="signOutUser()" style="width:100%;margin-top:10px;background:transparent;border:1px solid #333;border-radius:10px;padding:11px;color:#666;font-size:13px;cursor:pointer;">Sign Out</button>
+    </div>
+</div>
+
+<!-- AUTH OVERLAY -->
+<div id="authOverlay" style="display:none;position:fixed;inset:0;background:#080808;z-index:9999;align-items:center;justify-content:center;flex-direction:column;">
+    <div style="background:#111;border:1px solid rgba(255,107,0,0.3);border-radius:16px;padding:32px;width:320px;max-width:90%;">
+        <div style="font-size:22px;font-weight:800;color:#FF6B00;text-align:center;margin-bottom:6px;letter-spacing:1.5px;">FITTRACK AI</div>
+        <div style="font-size:13px;color:#555;text-align:center;margin-bottom:24px;">Your fitness, synced everywhere.</div>
+        <div id="authError" style="display:none;border-radius:8px;padding:10px;font-size:13px;margin-bottom:14px;"></div>
+        <input id="authEmail" type="email" placeholder="Email" style="width:100%;background:#1a1a1a;border:1px solid rgba(255,107,0,0.2);border-radius:10px;padding:12px 14px;color:#f0f0f0;font-size:14px;margin-bottom:10px;box-sizing:border-box;outline:none;font-family:inherit;">
+        <input id="authPassword" type="password" placeholder="Password" style="width:100%;background:#1a1a1a;border:1px solid rgba(255,107,0,0.2);border-radius:10px;padding:12px 14px;color:#f0f0f0;font-size:14px;margin-bottom:16px;box-sizing:border-box;outline:none;font-family:inherit;">
+        <button id="authBtn" onclick="handleAuth()" style="width:100%;background:#FF6B00;border:none;border-radius:10px;padding:13px;color:#000;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:12px;font-family:inherit;">Sign In</button>
+        <div style="text-align:center;font-size:13px;color:#555;">
+            <span id="authToggleText">Don't have an account?</span>
+            <span onclick="toggleAuthMode()" style="color:#FF6B00;cursor:pointer;margin-left:4px;" id="authToggleLink">Sign Up</span>
+        </div>
     </div>
 </div>
 
@@ -1055,6 +1073,106 @@
 
 <script>
 // ─────────────────────────────────────────
+//  SUPABASE
+// ─────────────────────────────────────────
+const SUPABASE_URL = 'https://kuyhoycnldcbgmkaaejl.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_aZ771usWQ33-LZg2EiLH1g_6Ceke5Ex';
+const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let authMode = 'signin';
+
+function toggleAuthMode() {
+    authMode = authMode === 'signin' ? 'signup' : 'signin';
+    document.getElementById('authBtn').textContent = authMode === 'signin' ? 'Sign In' : 'Sign Up';
+    document.getElementById('authToggleText').textContent = authMode === 'signin' ? "Don't have an account?" : 'Already have an account?';
+    document.getElementById('authToggleLink').textContent = authMode === 'signin' ? 'Sign Up' : 'Sign In';
+    document.getElementById('authError').style.display = 'none';
+}
+
+async function handleAuth() {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const errEl = document.getElementById('authError');
+    errEl.style.display = 'none';
+    if (!email || !password) {
+        errEl.textContent = 'Please enter email and password.';
+        errEl.style.display = 'block';
+        return;
+    }
+    document.getElementById('authBtn').textContent = 'Loading...';
+    let result;
+    if (authMode === 'signin') {
+        result = await _supabase.auth.signInWithPassword({ email, password });
+    } else {
+        result = await _supabase.auth.signUp({ email, password });
+    }
+    if (result.error) {
+        errEl.style.background = 'rgba(255,50,50,0.1)';
+        errEl.style.borderColor = 'rgba(255,50,50,0.3)';
+        errEl.style.color = '#ff6b6b';
+        errEl.textContent = result.error.message;
+        errEl.style.display = 'block';
+        document.getElementById('authBtn').textContent = authMode === 'signin' ? 'Sign In' : 'Sign Up';
+        return;
+    }
+    if (authMode === 'signup') {
+        errEl.style.background = 'rgba(0,200,100,0.1)';
+        errEl.style.borderColor = 'rgba(0,200,100,0.3)';
+        errEl.style.color = '#4ade80';
+        errEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+        errEl.style.display = 'block';
+        document.getElementById('authBtn').textContent = 'Sign Up';
+        authMode = 'signin';
+        document.getElementById('authBtn').textContent = 'Sign In';
+        document.getElementById('authToggleText').textContent = "Don't have an account?";
+        document.getElementById('authToggleLink').textContent = 'Sign Up';
+        return;
+    }
+    await initApp();
+}
+
+async function loadFromSupabase() {
+    const { data: { user } } = await _supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await _supabase.from('user_data').select('data_key, data_value').eq('user_id', user.id);
+    if (error || !data) return;
+    data.forEach(row => { if (row.data_value !== null) localStorage.setItem(row.data_key, row.data_value); });
+}
+
+async function syncToSupabase() {
+    const { data: { user } } = await _supabase.auth.getUser();
+    if (!user) return;
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('fittrack_')) {
+            rows.push({ user_id: user.id, data_key: key, data_value: localStorage.getItem(key), updated_at: new Date().toISOString() });
+        }
+    }
+    if (rows.length === 0) return;
+    await _supabase.from('user_data').upsert(rows, { onConflict: 'user_id,data_key' });
+}
+
+async function signOutUser() {
+    await _supabase.auth.signOut();
+    document.getElementById('settingsOverlay').classList.remove('open');
+    document.getElementById('authOverlay').style.display = 'flex';
+}
+
+async function initApp() {
+    document.getElementById('authOverlay').style.display = 'none';
+    await loadFromSupabase();
+    apiKey = localStorage.getItem('fittrack_groq_key') || '';
+    todayLog = loadTodayLog();
+    renderSummary();
+    renderMacroBar();
+    renderWater();
+    renderProfileDisplay();
+    renderStreak();
+    if (!apiKey) { openSettings(); } else { addWelcome(); }
+}
+
+// ─────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────
 let apiKey = localStorage.getItem('fittrack_groq_key') || '';
@@ -1116,6 +1234,7 @@ function saveLog() {
     localStorage.setItem(todayKey(), JSON.stringify(todayLog));
     renderSummary();
     renderMacroBar();
+    syncToSupabase();
 }
 
 // ─────────────────────────────────────────
@@ -2219,6 +2338,7 @@ function saveSettings() {
         }));
     }
     renderProfileDisplay();
+    syncToSupabase();
     document.getElementById('settingsOverlay').classList.remove('open');
     if (!document.getElementById('messages').querySelector('.message')) {
         addWelcome();
@@ -3603,20 +3723,18 @@ function addWelcome() {
 // ─────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────
-renderSummary();
-renderMacroBar();
-renderWater();
-renderProfileDisplay();
-renderStreak();
-if (!apiKey) {
-    openSettings();
-} else {
-    addWelcome();
-}
-
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js');
 }
+
+(async () => {
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (session) {
+        await initApp();
+    } else {
+        document.getElementById('authOverlay').style.display = 'flex';
+    }
+})();
 </script>
 
 </body>
