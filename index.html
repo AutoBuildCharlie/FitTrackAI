@@ -807,6 +807,7 @@
                 <input class="ql-input" id="qlCarbs" placeholder="Carbs (g)" type="number" oninput="qlAutoCalc()" />
                 <input class="ql-input" id="qlFat" placeholder="Fat (g)" type="number" oninput="qlAutoCalc()" />
             </div>
+            <div id="qlRecentMeals" style="margin-top:12px;"></div>
         </div>
 
         <!-- STRENGTH FORM -->
@@ -847,6 +848,10 @@
                 <input class="ql-input" id="qlDuration" placeholder="Duration (mins)" type="number" />
                 <input class="ql-input" id="qlPace" placeholder="Pace (MM:SS, optional)" />
                 <input class="ql-input" id="qlHR" placeholder="Avg HR (optional)" type="number" />
+            </div>
+            <div style="margin-top:8px;position:relative;">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;">📍</span>
+                <input class="ql-input" id="qlLocation" placeholder="Location (optional, e.g. Central Park)" style="padding-left:34px;" />
             </div>
         </div>
 
@@ -1691,6 +1696,7 @@ function renderWeeklyView() {
                     html += `<div style="font-size:13px;color:var(--text);margin-bottom:2px;">• ${escHtml(w.summary)}</div>`;
                     if (setsReps) html += `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;padding-left:10px;">${setsReps}</div>`;
                     if (muscles) html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;padding-left:10px;">${muscles}</div>`;
+                    if (w.location) html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;padding-left:10px;">📍 ${escHtml(w.location)}</div>`;
                 });
             }
 
@@ -2276,8 +2282,11 @@ MEAL (only when user says they ate/had/consumed something):
 WORKOUT:
 {"message":"...", "log":{"type":"workout","muscleGroups":["chest"],"workoutTypes":["strength"],"exercises":["bench press"],"sets":3,"reps":8,"weight":185,"summary":"Bench press 3x8 @ 185lbs"}}
 
-RUN: caloriesBurned = distance_miles × weight_lbs × 0.63. Convert km to miles. Only include "pace" if user states it.
-{"message":"...", "log":{"type":"run","distance":3.1,"duration":28,"caloriesBurned":310,"summary":"3.1 mile run"}}
+RUN: caloriesBurned = distance_miles × weight_lbs × 0.63. Convert km to miles. Only include "pace" if user states it. Include "location" if user mentions where they ran.
+{"message":"...", "log":{"type":"run","distance":3.1,"duration":28,"caloriesBurned":310,"location":"Central Park","summary":"3.1 mile run at Central Park"}}
+- If user says "I ran at [location]" but gives no distance → ask "How many miles did you run at [location]?" before logging.
+- Edit run location: {"log":{"type":"edit_run","location":"Riverside Park"}}
+- Delete run location: {"log":{"type":"edit_run","location":null}}
 
 GOALS: Save when user mentions something to achieve. Celebrate hard + mark achieved when they hit it.
 - Save: {"log":{"type":"save_goal","text":"Run 5k under 25min"}}
@@ -2504,10 +2513,14 @@ async function askClaude(userMessage) {
                 if (logData.distance !== undefined) {
                     run.distance       = parseFloat(logData.distance);
                     run.caloriesBurned = Math.round(run.distance * editWeight * 0.63);
-                    run.summary        = `${run.distance} mile run`;
+                    run.summary        = `${run.distance} mile run${run.location ? ' at ' + run.location : ''}`;
                 }
                 if (logData.duration !== undefined) run.duration = logData.duration;
                 if (logData.pace     !== undefined) run.pace     = logData.pace;
+                if (logData.location !== undefined) {
+                    run.location = logData.location || null;
+                    run.summary  = `${run.distance || 0} mile run${run.location ? ' at ' + run.location : ''}`;
+                }
             }
             setLogForDate(editDate, dayLog);
         } else if (logData?.type === 'delete_run') {
@@ -3225,6 +3238,7 @@ let qlCurrentTab = 'meal';
 
 document.getElementById('quickLogBtn').addEventListener('click', () => {
     renderQLSavedFoods();
+    renderQLRecentMeals();
     qlSelectedMuscles = [];
     qlRenderMuscleChips();
     document.getElementById('quickLogOverlay').classList.add('open');
@@ -3343,8 +3357,40 @@ function qlFillFood(i) {
     document.getElementById('qlFat').value      = f.fat;
 }
 
+let qlRecentMealData = [];
+
+function renderQLRecentMeals() {
+    const container = document.getElementById('qlRecentMeals');
+    if (!container) return;
+    const meals = [...(todayLog.meals || [])].reverse().slice(0, 10);
+    qlRecentMealData = meals;
+    if (!meals.length) { container.innerHTML = ''; return; }
+    container.innerHTML = `
+        <div style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Recent Meals</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            ${meals.map((m, i) => `
+                <button onclick="qlLoadRecentMeal(${i})"
+                    style="background:#1a1a1a;border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+                           text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;box-sizing:border-box;">
+                    <span style="font-size:13px;color:var(--text);font-weight:600;">${escHtml(m.summary)}</span>
+                    <span style="font-size:11px;color:var(--text-dim);white-space:nowrap;margin-left:8px;">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</span>
+                </button>`).join('')}
+        </div>`;
+}
+
+function qlLoadRecentMeal(idx) {
+    const meal = qlRecentMealData[idx];
+    if (!meal) return;
+    document.getElementById('qlMealName').value  = meal.summary  || '';
+    document.getElementById('qlCal').value       = meal.calories || '';
+    document.getElementById('qlProtein').value   = meal.protein  || '';
+    document.getElementById('qlCarbs').value     = meal.carbs    || '';
+    document.getElementById('qlFat').value       = meal.fat      || '';
+}
+
 function switchQLTab(tab, btn) {
     if (tab === 'strength') { qlSelectedMuscles = []; qlRenderMuscleChips(); }
+    if (tab === 'meal') renderQLRecentMeals();
     qlCurrentTab = tab;
     document.querySelectorAll('.ql-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -3393,11 +3439,12 @@ function saveQuickLog() {
         const duration = parseFloat(document.getElementById('qlDuration').value) || 0;
         const pace     = document.getElementById('qlPace').value.trim();
         const hr       = parseFloat(document.getElementById('qlHR').value) || 0;
+        const location = document.getElementById('qlLocation').value.trim();
         if (!distance) { alert('Enter a distance.'); return; }
         const profile = loadProfile();
         const runCal = Math.round(distance * (parseFloat(profile.weight) || 185) * 0.63);
-        const summary = `${distance} mile run${duration ? ` in ${duration}min` : ''}`;
-        const entry = { type: 'run', summary, distance, duration: duration || null, pace: pace || null, avgHeartRate: hr || null, caloriesBurned: runCal, time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) };
+        const summary = `${distance} mile run${location ? ' at ' + location : ''}${duration ? ` in ${duration}min` : ''}`;
+        const entry = { type: 'run', summary, distance, duration: duration || null, pace: pace || null, avgHeartRate: hr || null, caloriesBurned: runCal, location: location || null, time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) };
         addRunCard(entry);
         todayLog.workouts.push(entry);
         saveLog(); renderStreak(); renderMacroBar();
@@ -3407,7 +3454,7 @@ function saveQuickLog() {
     }
 
     // Clear and close
-    ['qlMealName','qlCal','qlProtein','qlCarbs','qlFat','qlExercise','qlSets','qlReps','qlWeight','qlMuscles','qlDistance','qlDuration','qlPace','qlHR'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['qlMealName','qlCal','qlProtein','qlCarbs','qlFat','qlExercise','qlSets','qlReps','qlWeight','qlMuscles','qlDistance','qlDuration','qlPace','qlHR','qlLocation'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('quickLogOverlay').classList.remove('open');
 }
 
@@ -3476,7 +3523,7 @@ function renderMonthlyView() {
                 html += `<div style="font-size:13px;font-weight:700;margin-bottom:1px;">${escHtml(w.summary)}</div>
                     ${setsReps ? `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;">${setsReps}</div>` : ''}
                     ${muscles && !isRun ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${muscles}</div>` : ''}
-                    ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}</div>` : ''}`;
+                    ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}${w.location ? ' · 📍 ' + escHtml(w.location) : ''}</div>` : ''}`;
             });
             if (!data.workouts.length) html += `<div style="font-size:12px;color:var(--text-dim);">Rest day</div>`;
             if (data.note) html += `<div style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:4px;">📓 "${escHtml(data.note)}"</div>`;
