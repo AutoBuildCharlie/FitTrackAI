@@ -1178,7 +1178,7 @@ async function signOutUser() {
 async function initApp() {
     document.getElementById('authOverlay').style.display = 'none';
     await loadFromSupabase();
-    apiKey = localStorage.getItem('fittrack_groq_key') || '';
+    apiKey = localStorage.getItem('fittrack_groq_key') || 'proxy';
     todayLog = loadTodayLog();
     renderSummary();
     renderMacroBar();
