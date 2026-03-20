@@ -1135,6 +1135,71 @@ function scrollBottom() {
     m.scrollTop = m.scrollHeight;
 }
 
+// Pending meal confirmations — keyed by unique card ID
+const pendingMealLogs = {};
+
+function showMealConfirm(logData) {
+    removeEmptyState();
+    const id = 'mc_' + Date.now();
+    pendingMealLogs[id] = logData;
+    const inp = (field, label, val) => `
+        <div>
+            <div style="font-size:10px;color:#888;margin-bottom:3px;">${label}</div>
+            <input type="number" id="${id}_${field}" value="${val}"
+                style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;border-radius:6px;
+                       padding:6px 8px;color:#f1f1f1;font-size:13px;font-family:inherit;">
+        </div>`;
+    const card = document.createElement('div');
+    card.id = id;
+    card.style.cssText = 'background:#1a1a1a;border:1.5px solid #fb923c;border-radius:12px;padding:14px;margin:6px 0;';
+    card.innerHTML = `
+        <div style="font-size:10px;font-weight:700;color:#fb923c;letter-spacing:1px;margin-bottom:6px;">MEAL ESTIMATE — REVIEW BEFORE LOGGING</div>
+        <div style="font-size:13px;color:#f1f1f1;margin-bottom:10px;">${logData.summary}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+            ${inp('cal',  'Calories',   logData.calories)}
+            ${inp('prot', 'Protein (g)', logData.protein)}
+            ${inp('carbs','Carbs (g)',   logData.carbs)}
+            ${inp('fat',  'Fat (g)',     logData.fat)}
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button onclick="confirmMealLog('${id}')"
+                style="flex:1;background:#fb923c;border:none;border-radius:8px;padding:10px;
+                       color:#000;font-weight:700;font-size:13px;cursor:pointer;">✓ Log it</button>
+            <button onclick="document.getElementById('${id}').remove();delete pendingMealLogs['${id}'];"
+                style="flex:1;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:10px;
+                       color:#f1f1f1;font-weight:700;font-size:13px;cursor:pointer;">✕ Cancel</button>
+        </div>`;
+    document.getElementById('messages').appendChild(card);
+    scrollBottom();
+}
+
+function confirmMealLog(id) {
+    const logData = pendingMealLogs[id];
+    if (!logData) return;
+    const get = field => parseInt(document.getElementById(id + '_' + field)?.value) || 0;
+    const final = {
+        ...logData,
+        calories: get('cal'),
+        protein:  get('prot'),
+        carbs:    get('carbs'),
+        fat:      get('fat')
+    };
+    addMealCard(final);
+    todayLog.meals.push({
+        summary:  final.summary,
+        calories: final.calories,
+        protein:  final.protein,
+        carbs:    final.carbs,
+        fat:      final.fat,
+        time:     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    saveLog();
+    renderStreak();
+    renderMacroBar();
+    document.getElementById(id)?.remove();
+    delete pendingMealLogs[id];
+}
+
 function addBubble(role, text) {
     removeEmptyState();
     const wrap = document.createElement('div');
@@ -2537,17 +2602,7 @@ async function askClaude(userMessage) {
                 addBubble('ai', msg);
             }
         } else if (logData?.type === 'meal') {
-            addMealCard(logData);
-            todayLog.meals.push({
-                summary:  logData.summary,
-                calories: logData.calories,
-                protein:  logData.protein,
-                carbs:    logData.carbs,
-                fat:      logData.fat,
-                time:     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            });
-            saveLog();
-            renderStreak();
+            showMealConfirm(logData);
         } else if (logData?.type === 'edit_meal') {
             const emDate = logData.date || localDateStr();
             pushUndo(emDate);
