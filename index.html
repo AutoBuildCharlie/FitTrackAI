@@ -1145,6 +1145,8 @@ const pendingMealLogs = {};
 
 function showMealConfirm(logData) {
     removeEmptyState();
+    // Always recalculate calories from macros — never trust AI's calorie estimate
+    logData.calories = Math.round((logData.protein || 0) * 4 + (logData.carbs || 0) * 4 + (logData.fat || 0) * 9);
     const id = 'mc_' + Date.now();
     pendingMealLogs[id] = logData;
     const inp = (field, label, val) => `
