@@ -2398,6 +2398,9 @@ async function askClaude(userMessage) {
         const goals = loadGoals();
         const todayTotals = todayLog.meals.reduce((a,m)=>({calories:a.calories+m.calories,protein:a.protein+m.protein,carbs:a.carbs+m.carbs,fat:a.fat+m.fat}),{calories:0,protein:0,carbs:0,fat:0});
         const macroContext = `\n\nDate:${localDateStr()}. Remaining today:${goals.calories-todayTotals.calories}cal ${goals.protein-todayTotals.protein}g protein ${goals.carbs-todayTotals.carbs}g carbs ${goals.fat-todayTotals.fat}g fat.`;
+        const todayMealsContext = todayLog.meals.length > 0
+            ? `\n\nMeals logged today: ${todayLog.meals.map(m=>`${m.summary} (${m.calories}cal ${m.protein}g P ${m.carbs}g C ${m.fat}g F${m.time?' @'+m.time:''})`).join(' | ')}. Total consumed: ${todayTotals.calories}cal ${todayTotals.protein}g protein ${todayTotals.carbs}g carbs ${todayTotals.fat}g fat.`
+            : '';
 
         const todayNote = loadNote(localDateStr());
         const journalContext = todayNote ? `\n\nToday's note: "${todayNote}"` : '';
@@ -2437,7 +2440,7 @@ async function askClaude(userMessage) {
             : `\n\nFITNESS PROFILE: Not set yet. Early in this conversation (naturally, not as a form), ask: "Quick question before we get going — what's your fitness level right now? Like beginner, intermediate, or advanced? And what's your main goal — lose weight, build muscle, get stronger, improve cardio, something else?" Save both when they answer: {"message":"...", "log":{"type":"profile","fitnessLevel":"...","fitnessGoal":"..."}}. Only ask once.`;
 
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + journalContext + goalsContext + nameContext + fitnessContext + programContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + todayMealsContext + journalContext + goalsContext + nameContext + fitnessContext + programContext },
             ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
         ];
 
