@@ -1191,7 +1191,7 @@ async function initApp() {
 // ─────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────
-let apiKey = localStorage.getItem('fittrack_groq_key') || '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';
+let apiKey = 'proxy';
 let history = [];
 let todayLog = loadTodayLog();
 let pendingMealScan = null; // holds per-serving data while waiting for serving count
@@ -1988,11 +1988,10 @@ async function handleImageFile(e) {
         document.getElementById('sendBtn').disabled = true;
 
         try {
-            const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            const res = await fetch('https://fittrack-proxy.aestheticcal22.workers.dev', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
