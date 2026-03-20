@@ -3275,7 +3275,7 @@ function qlToggleMuscle(m) {
     qlRenderMuscleChips();
     document.getElementById('qlMuscles').value = qlSelectedMuscles.join(', ');
     document.getElementById('qlExercise').value = '';
-    qlShowExercises();
+    setTimeout(qlShowExercises, 0); // defer until after click bubbles to document
 }
 
 function qlMuscleTyped() {}
