@@ -1503,7 +1503,7 @@ function recalcMacros() {
     const preview = document.getElementById('macroPreview');
     // deactivate presets if user typed custom values
     document.querySelectorAll('.macro-preset-btn').forEach(btn => {
-        const [bp, bc, bf] = btn.getAttribute('onclick').match(/\d+/g).slice(1).map(Number);
+        const [bp, bc, bf] = (btn.getAttribute('onclick').match(/\d+/g) || []).slice(1).map(Number);
         if (!(bp === pPct && bc === cPct && bf === fPct)) btn.classList.remove('active');
     });
     if (!cal || !pPct) { warning.style.display = 'none'; preview.innerHTML = ''; return; }
@@ -2007,7 +2007,7 @@ async function handleImageFile(e) {
             });
 
             const data = await res.json();
-            if (!data.choices || !data.choices[0]) {
+            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
                 throw new Error(data.error?.message || 'Vision API did not respond. Try a clearer photo.');
             }
             const raw = data.choices[0].message.content;
@@ -2320,7 +2320,7 @@ function openSettings() {
     // highlight matching preset button
     const pPct = g.proteinPct || 30, cPct = g.carbsPct || 40, fPct = g.fatPct || 30;
     document.querySelectorAll('.macro-preset-btn').forEach(btn => {
-        const [bp, bc, bf] = btn.getAttribute('onclick').match(/\d+/g).slice(1).map(Number);
+        const [bp, bc, bf] = (btn.getAttribute('onclick').match(/\d+/g) || []).slice(1).map(Number);
         btn.classList.toggle('active', bp === pPct && bc === cPct && bf === fPct);
     });
     recalcMacros();
@@ -2341,7 +2341,9 @@ function saveSettings() {
     if (fullVisible) {
         saveGoals();
         renderMacroBar();
+        const existingProfile = loadProfile();
         localStorage.setItem('fittrack_profile', JSON.stringify({
+            ...existingProfile,
             name:     document.getElementById('profileName').value.trim(),
             age:      document.getElementById('profileAge').value.trim(),
             weight:   document.getElementById('profileWeight').value.trim(),
@@ -2609,6 +2611,9 @@ async function askClaude(userMessage) {
         }
 
         const data = await res.json();
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            throw new Error(data.error?.message || 'AI did not respond. Please try again.');
+        }
         const fullText = data.choices[0].message.content;
         history.push({ role: 'assistant', content: fullText });
 
