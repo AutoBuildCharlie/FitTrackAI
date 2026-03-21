@@ -1085,9 +1085,13 @@
 
         <!-- Goals Tab -->
         <div id="progressGoals" style="display:none;">
-            <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.5;">Tell the AI your goals in chat — it will save them here automatically. When you reach one, it'll celebrate and mark it done. 🎯</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.5;">Add goals below or tell the AI in chat — up to 10 goals. When you reach one, the AI will celebrate and mark it done. 🎯</div>
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <input id="goalInput" type="text" maxlength="120" placeholder="e.g. Run 5k under 25 min..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;outline:none;" onkeydown="if(event.key==='Enter')addGoalManual()">
+                <button onclick="addGoalManual()" style="background:var(--orange);border:none;border-radius:10px;padding:10px 16px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">+ Add</button>
+            </div>
             <div id="goalsList"></div>
-            <div id="goalsEmpty" style="text-align:center;color:var(--text-dim);padding:40px 0;font-size:14px;display:none;">No goals saved yet. Tell the AI what you're working towards!</div>
+            <div id="goalsEmpty" style="text-align:center;color:var(--text-dim);padding:30px 0;font-size:14px;display:none;">No goals yet. Add one above or tell the AI what you're working towards!</div>
         </div>
     </div>
 </div>
@@ -2487,9 +2491,10 @@ RUN: caloriesBurned = distance_miles × weight_lbs × 0.63. Convert km to miles.
 - Edit run location: {"log":{"type":"edit_run","location":"Riverside Park"}}
 - Delete run location: {"log":{"type":"edit_run","location":null}}
 
-GOALS: Save when user mentions something to achieve. Celebrate hard + mark achieved when they hit it.
+GOALS: Save when user mentions something to achieve. Max 10 active goals. Celebrate hard + mark achieved when they hit it.
 - Save: {"log":{"type":"save_goal","text":"Run 5k under 25min"}}
 - Achieve: {"log":{"type":"achieve_goal","id":ID_FROM_CONTEXT}}
+- Delete: {"log":{"type":"delete_goal","id":ID_FROM_CONTEXT}} or by text: {"log":{"type":"delete_goal","text":"5k"}}
 
 MACRO GOALS: {"log":{"type":"goals","calories":1800,"protein":140,"carbs":180,"fat":60}} — only include fields changing.
 % goals: protein g = cal×pct÷4, carbs g = cal×pct÷4, fat g = cal×pct÷9.
@@ -2977,8 +2982,10 @@ async function askClaude(userMessage) {
         } else if (logData?.type === 'save_goal') {
             if (logData.text) {
                 const goals = loadGoalsList();
-                goals.push({ id: Date.now(), text: logData.text, achieved: false, achievedDate: null, addedDate: localDateStr() });
-                saveGoalsList(goals);
+                if (goals.filter(g => !g.achieved).length < 10) {
+                    goals.push({ id: Date.now(), text: logData.text, achieved: false, achievedDate: null, addedDate: localDateStr() });
+                    saveGoalsList(goals);
+                }
             }
         } else if (logData?.type === 'achieve_goal') {
             const goals = loadGoalsList();
@@ -2988,6 +2995,14 @@ async function askClaude(userMessage) {
                 goal.achievedDate = localDateStr();
                 saveGoalsList(goals);
             }
+        } else if (logData?.type === 'delete_goal') {
+            const goals = loadGoalsList();
+            const updated = logData.id
+                ? goals.filter(g => g.id !== logData.id)
+                : logData.text
+                    ? goals.filter(g => !g.text.toLowerCase().includes(String(logData.text).toLowerCase()))
+                    : goals;
+            saveGoalsList(updated);
         }
         } // end processLogItem
 
@@ -3147,6 +3162,22 @@ function renderGoalsTab() {
         });
     }
     container.innerHTML = html;
+}
+
+function addGoalManual() {
+    const input = document.getElementById('goalInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const goals = loadGoalsList();
+    if (goals.filter(g => !g.achieved).length >= 10) {
+        alert('You already have 10 active goals. Delete one to add more.');
+        return;
+    }
+    goals.push({ id: Date.now(), text, achieved: false, achievedDate: null, addedDate: localDateStr() });
+    saveGoalsList(goals);
+    input.value = '';
+    renderGoalsTab();
+    syncToSupabase();
 }
 
 // ─────────────────────────────────────────
