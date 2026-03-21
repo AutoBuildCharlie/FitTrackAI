@@ -2627,8 +2627,29 @@ async function askClaude(userMessage) {
             ? `\n\nFITNESS PROFILE: Level: ${profile.fitnessLevel || 'unknown'}. Goal: ${profile.fitnessGoal || 'not set'}. Tailor ALL advice to this. Beginner = focus on form, simple movements, consistency, don't overwhelm. Intermediate = progressive overload, compound lifts, structured programming. Advanced = periodization, intensity techniques, sport-specific. Always advance the user toward their goal — suggest next steps, next weights, next milestones.`
             : `\n\nFITNESS PROFILE: Not set yet. Early in this conversation (naturally, not as a form), ask: "Quick question before we get going — what's your fitness level right now? Like beginner, intermediate, or advanced? And what's your main goal — lose weight, build muscle, get stronger, improve cardio, something else?" Save both when they answer: {"message":"...", "log":{"type":"profile","fitnessLevel":"...","fitnessGoal":"..."}}. Only ask once.`;
 
+        // ── PROTEIN ALERT — check if avg protein is under 75% across 3+ logged days ──
+        const proteinAlertContext = (() => {
+            const g = loadGoals();
+            if (!g.protein || g.protein <= 0) return '';
+            const dayPcts = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (!k || !k.startsWith('fittrack_2')) continue;
+                try {
+                    const log = JSON.parse(localStorage.getItem(k));
+                    if (!(log.meals || []).length) continue;
+                    const dayProt = log.meals.reduce((a, m) => a + (m.protein || 0), 0);
+                    dayPcts.push((dayProt / g.protein) * 100);
+                } catch(_) {}
+            }
+            if (dayPcts.length < 3) return '';
+            const avg = dayPcts.reduce((a, p) => a + p, 0) / dayPcts.length;
+            if (avg >= 75) return '';
+            return `\n\nPROTEIN ALERT: User has averaged ${Math.round(avg)}% of their protein goal (${g.protein}g/day) across ${dayPcts.length} logged days — below the 75% threshold. When food, macros, or muscle building comes up naturally, mention this once: let them know their protein has been averaging low and that hitting at least 75% of their protein goal consistently is key for building muscle. Be encouraging, not preachy. Only bring it up once per conversation.`;
+        })();
+
         const messages = [
-            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + todayMealsContext + journalContext + goalsContext + nameContext + fitnessContext + programContext },
+            { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + todayMealsContext + journalContext + goalsContext + nameContext + fitnessContext + programContext + proteinAlertContext },
             ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
         ];
 
