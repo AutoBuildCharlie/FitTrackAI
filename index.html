@@ -3277,28 +3277,38 @@ function renderWeightChart() {
     canvas.style.display = 'block';
     empty.style.display  = 'none';
     if (weightChartInstance) weightChartInstance.destroy();
+    const wCtx = canvas.getContext('2d');
+    const wGrad = wCtx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 200);
+    wGrad.addColorStop(0, 'rgba(251,146,60,0.35)');
+    wGrad.addColorStop(1, 'rgba(251,146,60,0)');
     weightChartInstance = new Chart(canvas, {
         type: 'line',
+        plugins: [{
+            id: 'weightGlow',
+            beforeDatasetsDraw(chart) { chart.ctx.save(); chart.ctx.shadowColor = 'rgba(251,146,60,0.7)'; chart.ctx.shadowBlur = 14; },
+            afterDatasetsDraw(chart) { chart.ctx.restore(); }
+        }],
         data: {
             labels: log.map(e => new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
             datasets: [{
                 label: 'Weight (lbs)',
                 data: log.map(e => e.weight),
                 borderColor: '#fb923c',
-                backgroundColor: 'rgba(251,146,60,0.08)',
-                borderWidth: 2,
-                pointBackgroundColor: '#fb923c',
-                pointRadius: 4,
-                tension: 0.3,
+                backgroundColor: wGrad,
+                borderWidth: 2.5,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#fb923c',
+                tension: 0.45,
                 fill: true
             }]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => items[0].label, label: (item) => `${item.raw} lbs` } } },
             scales: {
-                x: { ticks: { color: '#888', maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
+                y: { ticks: { display: false }, grid: { display: false }, border: { display: false } }
             }
         }
     });
@@ -3481,28 +3491,38 @@ function renderRunningChart() {
     empty.style.display  = 'none';
 
     if (runningChartInstance) runningChartInstance.destroy();
+    const rCtx = canvas.getContext('2d');
+    const rGrad = rCtx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 200);
+    rGrad.addColorStop(0, 'rgba(255,107,0,0.35)');
+    rGrad.addColorStop(1, 'rgba(255,107,0,0)');
     runningChartInstance = new Chart(canvas, {
         type: 'line',
+        plugins: [{
+            id: 'runningGlow',
+            beforeDatasetsDraw(chart) { chart.ctx.save(); chart.ctx.shadowColor = 'rgba(255,107,0,0.7)'; chart.ctx.shadowBlur = 14; },
+            afterDatasetsDraw(chart) { chart.ctx.restore(); }
+        }],
         data: {
             labels: runs.map(r => r.date),
             datasets: [{
-                label: 'Miles before smiles',
+                label: 'Miles',
                 data: runs.map(r => r.distance),
                 borderColor: '#FF6B00',
-                backgroundColor: 'rgba(255,107,0,0.1)',
-                tension: 0.3,
-                pointBackgroundColor: '#FF6B00',
-                pointRadius: 6,
-                pointHoverRadius: 8,
+                backgroundColor: rGrad,
+                borderWidth: 2.5,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#FF6B00',
+                tension: 0.45,
                 fill: true
             }]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => items[0].label, label: (item) => `${item.raw} mi` } } },
             scales: {
-                x: { ticks: { color: '#777' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                y: { ticks: { color: '#777' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
+                y: { ticks: { display: false }, grid: { display: false }, border: { display: false } }
             }
         }
     });
