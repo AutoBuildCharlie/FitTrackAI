@@ -3296,8 +3296,11 @@ function renderWeightChart() {
                 borderColor: '#fb923c',
                 backgroundColor: wGrad,
                 borderWidth: 2.5,
-                pointRadius: 0,
-                pointHoverRadius: 5,
+                pointRadius: 3,
+                pointBackgroundColor: '#fb923c',
+                pointBorderColor: 'rgba(251,146,60,0.3)',
+                pointBorderWidth: 3,
+                pointHoverRadius: 6,
                 pointHoverBackgroundColor: '#fb923c',
                 tension: 0.45,
                 fill: true
@@ -3308,7 +3311,7 @@ function renderWeightChart() {
             plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => items[0].label, label: (item) => `${item.raw} lbs` } } },
             scales: {
                 x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
-                y: { ticks: { display: false }, grid: { display: false }, border: { display: false } }
+                y: { ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.04)', lineWidth: 1 }, border: { display: false } }
             }
         }
     });
@@ -3510,8 +3513,11 @@ function renderRunningChart() {
                 borderColor: '#FF6B00',
                 backgroundColor: rGrad,
                 borderWidth: 2.5,
-                pointRadius: 0,
-                pointHoverRadius: 5,
+                pointRadius: 3,
+                pointBackgroundColor: '#FF6B00',
+                pointBorderColor: 'rgba(255,107,0,0.3)',
+                pointBorderWidth: 3,
+                pointHoverRadius: 6,
                 pointHoverBackgroundColor: '#FF6B00',
                 tension: 0.45,
                 fill: true
@@ -3522,7 +3528,7 @@ function renderRunningChart() {
             plugins: { legend: { display: false }, tooltip: { callbacks: { title: (items) => items[0].label, label: (item) => `${item.raw} mi` } } },
             scales: {
                 x: { ticks: { display: false }, grid: { display: false }, border: { display: false } },
-                y: { ticks: { display: false }, grid: { display: false }, border: { display: false } }
+                y: { ticks: { display: false }, grid: { color: 'rgba(255,255,255,0.04)', lineWidth: 1 }, border: { display: false } }
             }
         }
     });
