@@ -1226,6 +1226,14 @@ async function loadFromSupabase() {
                 const remoteCount = (remote.workouts || []).length + (remote.meals || []).length;
                 if (remoteCount > localCount) localStorage.setItem(row.data_key, row.data_value);
             } catch (_) { localStorage.setItem(row.data_key, row.data_value); }
+        } else if (row.data_key === 'fittrack_profile') {
+            // Merge profile — prefer local values for any field that is set locally
+            try {
+                const local = JSON.parse(localVal);
+                const remote = JSON.parse(row.data_value);
+                const merged = { ...remote, ...Object.fromEntries(Object.entries(local).filter(([_, v]) => v !== '' && v !== null && v !== undefined)) };
+                localStorage.setItem(row.data_key, JSON.stringify(merged));
+            } catch (_) { localStorage.setItem(row.data_key, row.data_value); }
         } else {
             localStorage.setItem(row.data_key, row.data_value);
         }
