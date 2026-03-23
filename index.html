@@ -1216,7 +1216,17 @@ async function loadFromSupabase() {
         const localVal = localStorage.getItem(row.data_key);
         // For day logs (fittrack_YYYY-MM-DD), keep whichever has more entries to prevent overwriting real data
         if (!localVal) {
-            localStorage.setItem(row.data_key, row.data_value);
+            // Don't restore note keys unless they have actual content
+            if (row.data_key.startsWith('fittrack_note_')) {
+                try {
+                    const notes = JSON.parse(row.data_value);
+                    if (Array.isArray(notes) && notes.length > 0) {
+                        localStorage.setItem(row.data_key, row.data_value);
+                    }
+                } catch(_) {}
+            } else {
+                localStorage.setItem(row.data_key, row.data_value);
+            }
         } else if (/^fittrack_\d{4}-\d{2}-\d{2}$/.test(row.data_key)) {
             try {
                 const local = JSON.parse(localVal);
@@ -1893,20 +1903,19 @@ function checkCalorieMilestone(pct) {
 function renderSummary() {} // kept for compatibility
 
 function getWeekDates() {
-    // Returns the 7 dates for Sun-Sat of the current week
+    // Returns the last 7 days: today first, then 6 days back
     const today = new Date();
-    const day = today.getDay(); // 0=Sun
     const dates = [];
     for (let i = 0; i < 7; i++) {
         const d = new Date(today);
-        d.setDate(today.getDate() - day + i);
+        d.setDate(today.getDate() - i);
         dates.push(d);
     }
     return dates;
 }
 
 function renderWeeklyView() {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dates = getWeekDates();
     const todayStr = localDateStr();
     let html = '';
@@ -1917,6 +1926,7 @@ function renderWeeklyView() {
         const raw = localStorage.getItem(key);
         const log = raw ? JSON.parse(raw) : { workouts: [], meals: [] };
         const isToday = dateStr === todayStr;
+        const dayLabel = dayNames[date.getDay()];
 
         const tot = (log.meals || []).reduce((a, m) => ({
             calories: a.calories + (m.calories || 0),
@@ -1930,7 +1940,7 @@ function renderWeeklyView() {
         html += `<div style="margin-bottom:14px;border:1px solid ${isToday ? 'var(--orange)' : 'var(--border)'};border-radius:12px;overflow:hidden;">
             <div style="background:${isToday ? 'rgba(255,107,0,0.15)' : 'var(--bg2)'};padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
                 <div style="font-weight:700;color:${isToday ? 'var(--orange)' : 'var(--text)'};font-size:14px;">
-                    ${days[i]}${isToday ? ' <span style="font-size:11px;background:var(--orange);color:#000;padding:1px 6px;border-radius:4px;margin-left:4px;">TODAY</span>' : ''}
+                    ${dayLabel}${isToday ? ' <span style="font-size:11px;background:var(--orange);color:#000;padding:1px 6px;border-radius:4px;margin-left:4px;">TODAY</span>' : ''}
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;">
                     <div style="font-size:12px;color:var(--text-dim);">${date.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
