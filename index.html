@@ -2750,7 +2750,7 @@ async function askClaude(userMessage) {
 
         const fitnessContext = (profile.fitnessLevel || profile.fitnessGoal)
             ? `\n\nFITNESS PROFILE: Level: ${profile.fitnessLevel || 'unknown'}. Goal: ${profile.fitnessGoal || 'not set'}. Tailor ALL advice to this. Beginner = focus on form, simple movements, consistency, don't overwhelm. Intermediate = progressive overload, compound lifts, structured programming. Advanced = periodization, intensity techniques, sport-specific. Always advance the user toward their goal — suggest next steps, next weights, next milestones.`
-            : `\n\nFITNESS PROFILE: Not set yet. Early in this conversation (naturally, not as a form), ask: "Quick question before we get going — what's your fitness level right now? Like beginner, intermediate, or advanced? And what's your main goal — lose weight, build muscle, get stronger, improve cardio, something else?" Save both when they answer: {"message":"...", "log":{"type":"profile","fitnessLevel":"...","fitnessGoal":"..."}}. Only ask once.`;
+            : '';
 
         // ── PROTEIN ALERT — check if avg protein is under 75% across 3+ logged days ──
         const proteinAlertContext = (() => {
