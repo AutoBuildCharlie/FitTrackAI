@@ -1959,7 +1959,6 @@ function renderWeeklyView() {
                     html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px;">
                         <div style="font-size:13px;color:var(--text);">• ${escHtml(w.summary)}</div>
                         <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
-                            <span onclick="openItemEdit('${dateStr}','workout',${wIdx})" style="font-size:11px;color:var(--text-dim);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:4px;">✏️</span>
                             <span onclick="deleteLogItem('${dateStr}','workout',${wIdx})" style="font-size:11px;color:#ff6b6b;cursor:pointer;padding:1px 5px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
                         </div>
                     </div>`;
@@ -1975,7 +1974,6 @@ function renderWeeklyView() {
                     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
                         <div style="font-size:13px;color:var(--text);">• ${escHtml(m.summary)}</div>
                         <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
-                            <span onclick="openItemEdit('${dateStr}','meal',${mIdx})" style="font-size:11px;color:var(--text-dim);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:4px;">✏️</span>
                             <span onclick="deleteLogItem('${dateStr}','meal',${mIdx})" style="font-size:11px;color:#ff6b6b;cursor:pointer;padding:1px 5px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
                         </div>
                     </div>`;
@@ -2005,7 +2003,7 @@ function renderWeeklyView() {
             if (dayNotes.length) {
                 html += `<div style="padding:0 14px 10px;"><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:6px;">📓 Notes</div>`;
                 dayNotes.forEach((n, i) => {
-                    html += `<div onclick="openNoteEdit('${dateStr}', ${i})" style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;cursor:pointer;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:6px;font-style:normal;">${n.time}</span>` : ''}"${escHtml(n.text)}"</div>`;
+                    html += `<div style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:6px;font-style:normal;">${n.time}</span>` : ''}"${escHtml(n.text)}"</div>`;
                 });
                 html += `</div>`;
             }
@@ -2017,7 +2015,7 @@ function renderWeeklyView() {
             if (dayNotes.length) {
                 html += `<div style="padding:10px 14px;"><div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:6px;">📓 Notes</div>`;
                 dayNotes.forEach((n, i) => {
-                    html += `<div onclick="openNoteEdit('${dateStr}', ${i})" style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;cursor:pointer;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:6px;font-style:normal;">${n.time}</span>` : ''}"${escHtml(n.text)}"</div>`;
+                    html += `<div style="font-size:13px;color:var(--text-dim);line-height:1.5;font-style:italic;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:6px;font-style:normal;">${n.time}</span>` : ''}"${escHtml(n.text)}"</div>`;
                 });
                 html += `</div>`;
             } else {
@@ -2409,7 +2407,15 @@ function saveNotes(dateStr, notes) {
         localStorage.setItem(key, JSON.stringify(notes));
     } else {
         localStorage.removeItem(key);
-        deleteKeyFromSupabase(key);
+        // Upsert empty array so Supabase doesn't restore the deleted note on next load
+        (async () => {
+            const { data: { user } } = await _supabase.auth.getUser();
+            if (!user) return;
+            await _supabase.from('user_data').upsert(
+                [{ user_id: user.id, data_key: key, data_value: '[]', updated_at: new Date().toISOString() }],
+                { onConflict: 'user_id,data_key' }
+            );
+        })();
     }
 }
 
@@ -2601,9 +2607,10 @@ READ/EDIT/DELETE (all support optional "date", defaults to today):
 - MATCH RULE: The "match" field must use a keyword from the exact meal summary shown in context. If unsure, trigger show_meals first, then edit/delete.
 - Edit meal: {"log":{"type":"edit_meal","match":"chicken","calories":400,"protein":45,"carbs":10,"fat":8}} add "mode":"add" to add on top
 - Delete meal: {"log":{"type":"delete_meal","match":"pizza","date":"YYYY-MM-DD"}}
-- Move meal (array): {"log":[{"type":"copy_meal","date":"YYYY-MM-DD","match":"lunch"},{"type":"delete_meal","date":"YYYY-MM-DD","match":"lunch"}]}
+- Move meal to another day (array): {"log":[{"type":"copy_meal","date":"YYYY-MM-DD","to_date":"YYYY-MM-DD","match":"lunch"},{"type":"delete_meal","date":"YYYY-MM-DD","match":"lunch"}]}
 - Edit workout: {"log":{"type":"edit_workout","match":"squat","weight":225,"sets":5,"reps":3}}
 - Delete workout: {"log":{"type":"delete_workout","match":"bench press"}}
+- Move workout to another day (array): {"log":[{"type":"copy_workout","date":"YYYY-MM-DD","to_date":"YYYY-MM-DD","match":"squat"},{"type":"delete_workout","date":"YYYY-MM-DD","match":"squat"}]}
 - Edit run: {"log":{"type":"edit_run","distance":5,"duration":45,"pace":"9:30","avgHeartRate":155}} — omit "date" for today. IMPORTANT: if user adds pace, duration, or HR after a run was just logged, always use edit_run to save it — never just comment on it.
 - Delete run: {"log":{"type":"delete_run"}} or with date: {"log":{"type":"delete_run","date":"YYYY-MM-DD"}}
 - Clear all/meals/workouts/week: {"log":{"type":"clear","target":"all"}}
@@ -3062,6 +3069,7 @@ async function askClaude(userMessage) {
             }
         } else if (logData?.type === 'copy_meal') {
             const fromDate = logData.date;
+            const toDate = logData.to_date;
             const kw = (logData.match || '').toLowerCase();
             if (fromDate) {
                 const srcLog = getLogForDate(fromDate);
@@ -3070,9 +3078,36 @@ async function askClaude(userMessage) {
                     : (srcLog.meals || [])[srcLog.meals.length - 1];
                 if (meal) {
                     const copied = { ...meal, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-                    todayLog.meals.push(copied);
-                    saveLog();
-                    renderMacroBar();
+                    if (toDate) {
+                        const destLog = getLogForDate(toDate);
+                        destLog.meals = [...(destLog.meals || []), copied];
+                        setLogForDate(toDate, destLog);
+                    } else {
+                        todayLog.meals.push(copied);
+                        saveLog();
+                        renderMacroBar();
+                    }
+                }
+            }
+        } else if (logData?.type === 'copy_workout') {
+            const fromDate = logData.date;
+            const toDate = logData.to_date;
+            const kw = (logData.match || '').toLowerCase();
+            if (fromDate) {
+                const srcLog = getLogForDate(fromDate);
+                const workout = kw
+                    ? (srcLog.workouts || []).find(w => (w.summary || '').toLowerCase().includes(kw))
+                    : (srcLog.workouts || [])[srcLog.workouts.length - 1];
+                if (workout) {
+                    const copied = { ...workout, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                    if (toDate) {
+                        const destLog = getLogForDate(toDate);
+                        destLog.workouts = [...(destLog.workouts || []), copied];
+                        setLogForDate(toDate, destLog);
+                    } else {
+                        todayLog.workouts.push(copied);
+                        saveLog();
+                    }
                 }
             }
         } else if (logData?.type === 'ai_name') {
@@ -4109,7 +4144,6 @@ function renderMonthlyView() {
                 html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1px;">
                     <div style="font-size:13px;font-weight:700;">${escHtml(w.summary)}</div>
                     <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
-                        <span onclick="openItemEdit('${dateStr}','workout',${wIdx})" style="font-size:10px;color:var(--text-dim);cursor:pointer;padding:1px 4px;border:1px solid var(--border);border-radius:4px;">✏️</span>
                         <span onclick="deleteLogItem('${dateStr}','workout',${wIdx})" style="font-size:10px;color:#ff6b6b;cursor:pointer;padding:1px 4px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
                     </div>
                 </div>
@@ -4123,7 +4157,6 @@ function renderMonthlyView() {
                     html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px;">
                         <div style="font-size:12px;color:var(--text-dim);">🍽️ ${escHtml(meal.summary)}${meal.calories ? ` <span style="color:var(--orange);">${meal.calories}cal</span>` : ''}</div>
                         <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
-                            <span onclick="openItemEdit('${dateStr}','meal',${mIdx})" style="font-size:10px;color:var(--text-dim);cursor:pointer;padding:1px 4px;border:1px solid var(--border);border-radius:4px;">✏️</span>
                             <span onclick="deleteLogItem('${dateStr}','meal',${mIdx})" style="font-size:10px;color:#ff6b6b;cursor:pointer;padding:1px 4px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
                         </div>
                     </div>`;
@@ -4131,7 +4164,7 @@ function renderMonthlyView() {
             }
             if (data.notes && data.notes.length) {
                 data.notes.forEach((n, i) => {
-                    html += `<div onclick="openNoteEdit('${dateStr}', ${i})" style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:4px;cursor:pointer;padding:4px 8px;background:var(--bg3);border-radius:6px;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:4px;font-style:normal;">${n.time}</span>` : ''}📓 "${escHtml(n.text)}" <span style="font-size:10px;font-style:normal;">✏️</span></div>`;
+                    html += `<div style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:4px;padding:4px 8px;background:var(--bg3);border-radius:6px;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:4px;font-style:normal;">${n.time}</span>` : ''}📓 "${escHtml(n.text)}"</div>`;
                 });
             }
             html += `</div></div>`;
