@@ -1953,10 +1953,16 @@ function renderWeeklyView() {
 
             if (log.workouts.length > 0) {
                 html += `<div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:6px;">💪 Workouts</div>`;
-                log.workouts.forEach(w => {
+                log.workouts.forEach((w, wIdx) => {
                     const muscles = (w.muscleGroups || []).slice(0,3).join(', ');
                     const setsReps = (w.sets && w.reps) ? `${w.sets}x${w.reps}${w.weight ? ' @ ' + w.weight + 'lbs' : ''}` : '';
-                    html += `<div style="font-size:13px;color:var(--text);margin-bottom:2px;">• ${escHtml(w.summary)}</div>`;
+                    html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px;">
+                        <div style="font-size:13px;color:var(--text);">• ${escHtml(w.summary)}</div>
+                        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
+                            <span onclick="openItemEdit('${dateStr}','workout',${wIdx})" style="font-size:11px;color:var(--text-dim);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:4px;">✏️</span>
+                            <span onclick="deleteLogItem('${dateStr}','workout',${wIdx})" style="font-size:11px;color:#ff6b6b;cursor:pointer;padding:1px 5px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
+                        </div>
+                    </div>`;
                     if (setsReps) html += `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;padding-left:10px;">${setsReps}</div>`;
                     if (muscles) html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;padding-left:10px;">${muscles}</div>`;
                     if (w.location) html += `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;padding-left:10px;">📍 ${escHtml(w.location)}</div>`;
@@ -1965,8 +1971,14 @@ function renderWeeklyView() {
 
             if (log.meals.length > 0) {
                 html += `<div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-top:6px;margin-bottom:6px;">🍽️ Nutrition</div>`;
-                log.meals.forEach(m => {
-                    html += `<div style="font-size:13px;color:var(--text);margin-bottom:2px;">• ${escHtml(m.summary)}</div>`;
+                log.meals.forEach((m, mIdx) => {
+                    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                        <div style="font-size:13px;color:var(--text);">• ${escHtml(m.summary)}</div>
+                        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
+                            <span onclick="openItemEdit('${dateStr}','meal',${mIdx})" style="font-size:11px;color:var(--text-dim);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:4px;">✏️</span>
+                            <span onclick="deleteLogItem('${dateStr}','meal',${mIdx})" style="font-size:11px;color:#ff6b6b;cursor:pointer;padding:1px 5px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
+                        </div>
+                    </div>`;
                 });
                 html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;background:rgba(255,107,0,0.07);border-radius:8px;padding:8px;">
                     <div style="text-align:center;">
@@ -3641,8 +3653,85 @@ function renderRunningChart() {
 
 // ─── QUICK LOG ───
 let qlCurrentTab = 'meal';
+let qlTargetDate = null;   // set when opening quick log for a past day
+let qlEditMode   = null;   // { dateStr, type, index } when editing existing item
+
+function loadLogForDate(dateStr) {
+    const raw = localStorage.getItem('fittrack_' + dateStr);
+    return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+}
+
+function saveLogForDate(dateStr, log) {
+    localStorage.setItem('fittrack_' + dateStr, JSON.stringify(log));
+    if (dateStr === localDateStr()) {
+        todayLog = log;
+        renderSummary();
+        renderMacroBar();
+    }
+    syncToSupabase();
+    refreshLogViews();
+}
+
+function openQuickLogForDate(dateStr) {
+    qlTargetDate = dateStr;
+    qlEditMode = null;
+    renderQLSavedFoods();
+    renderQLRecentMeals();
+    renderQLRecentRuns();
+    qlSelectedMuscles = [];
+    qlRenderMuscleChips();
+    // Reset to meal tab
+    const mealBtn = document.querySelector('#quickLogOverlay .ql-tab');
+    switchQLTab('meal', mealBtn);
+    document.getElementById('quickLogOverlay').classList.add('open');
+}
+
+function openItemEdit(dateStr, type, index) {
+    const log = loadLogForDate(dateStr);
+    qlTargetDate = dateStr;
+    qlEditMode = { dateStr, type, index };
+    const tabs = document.querySelectorAll('#quickLogOverlay .ql-tab');
+    if (type === 'meal') {
+        const m = log.meals[index];
+        switchQLTab('meal', tabs[0]);
+        document.getElementById('qlMealName').value = m.summary || '';
+        document.getElementById('qlCal').value      = m.calories || '';
+        document.getElementById('qlProtein').value  = m.protein  || '';
+        document.getElementById('qlCarbs').value    = m.carbs    || '';
+        document.getElementById('qlFat').value      = m.fat      || '';
+    } else {
+        const w = log.workouts[index];
+        if (w.type === 'run') {
+            switchQLTab('run', tabs[2]);
+            document.getElementById('qlDistance').value = w.distance || '';
+            document.getElementById('qlDuration').value = w.duration || '';
+            document.getElementById('qlPace').value     = w.pace     || '';
+            document.getElementById('qlHR').value       = w.avgHeartRate || '';
+            document.getElementById('qlLocation').value = w.location  || '';
+        } else {
+            switchQLTab('strength', tabs[1]);
+            const ex = (w.exercises && w.exercises[0]) || w.summary || '';
+            document.getElementById('qlExercise').value = ex;
+            document.getElementById('qlSets').value     = w.sets   || '';
+            document.getElementById('qlReps').value     = w.reps   || '';
+            document.getElementById('qlWeight').value   = w.weight || '';
+            document.getElementById('qlMuscles').value  = (w.muscleGroups || []).join(', ');
+        }
+    }
+    document.getElementById('quickLogOverlay').classList.add('open');
+}
+
+function deleteLogItem(dateStr, type, index) {
+    if (!confirm(`Delete this ${type}?`)) return;
+    const log = loadLogForDate(dateStr);
+    if (type === 'meal') log.meals.splice(index, 1);
+    else log.workouts.splice(index, 1);
+    saveLogForDate(dateStr, log);
+}
 
 document.getElementById('quickLogBtn').addEventListener('click', () => {
+    qlTargetDate = null;
+    qlEditMode   = null;
     renderQLSavedFoods();
     renderQLRecentMeals();
     renderQLRecentRuns();
@@ -3870,6 +3959,11 @@ function switchQLTab(tab, btn) {
 }
 
 function saveQuickLog() {
+    const targetDate = qlTargetDate || localDateStr();
+    const isToday = targetDate === localDateStr();
+    const log = isToday ? todayLog : loadLogForDate(targetDate);
+    const now = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+
     if (qlCurrentTab === 'meal') {
         const name = document.getElementById('qlMealName').value.trim();
         const cal  = parseFloat(document.getElementById('qlCal').value)     || 0;
@@ -3878,16 +3972,20 @@ function saveQuickLog() {
         const fat  = parseFloat(document.getElementById('qlFat').value)      || 0;
         if (!name) { alert('Enter a food name.'); return; }
         const entry = { summary: name, calories: cal, protein: prot, carbs, fat };
-        addMealCard(entry);
-        todayLog.meals.push({ ...entry, time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) });
-        saveLog(); renderMacroBar();
+        const fullEntry = { ...entry, time: qlEditMode ? (log.meals[qlEditMode.index]?.time || now) : now };
+        if (qlEditMode && qlEditMode.type === 'meal') {
+            log.meals[qlEditMode.index] = fullEntry;
+        } else {
+            log.meals.push(fullEntry);
+        }
+        if (isToday) { addMealCard(entry); saveLog(); renderMacroBar(); } else { saveLogForDate(targetDate, log); }
         // Auto-save to food library if not already there
         const foods = loadFoodLibrary();
         if (!foods.find(f => f.name.toLowerCase() === name.toLowerCase())) {
             foods.unshift({ name, calories: cal, protein: prot, carbs, fat });
             saveFoodLibrary(foods);
         }
-        addBubble('ai', `✅ Logged ${name} — ${cal} cal, ${prot}g protein.`);
+        if (isToday) addBubble('ai', `✅ Logged ${name} — ${cal} cal, ${prot}g protein.`);
 
     } else if (qlCurrentTab === 'strength') {
         const exercise = document.getElementById('qlExercise').value.trim();
@@ -3897,11 +3995,15 @@ function saveQuickLog() {
         const muscles = document.getElementById('qlMuscles').value.split(',').map(s => s.trim()).filter(Boolean);
         if (!exercise) { alert('Enter an exercise name.'); return; }
         const summary = `${exercise}${sets && reps ? ` ${sets}x${reps}` : ''}${weight ? ` @ ${weight}lbs` : ''}`;
-        const entry = { type: 'workout', summary, exercises: [exercise], sets, reps, weight, muscleGroups: muscles, workoutTypes: ['strength'], time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) };
-        todayLog.workouts.push(entry);
-        saveLog(); renderStreak();
-        if (weight) checkPersonalRecord({ exercises: [exercise], weight });
-        addBubble('ai', `✅ Logged ${summary}.`);
+        const entry = { type: 'workout', summary, exercises: [exercise], sets, reps, weight, muscleGroups: muscles, workoutTypes: ['strength'], time: qlEditMode ? (log.workouts[qlEditMode.index]?.time || now) : now };
+        if (qlEditMode && qlEditMode.type === 'workout') {
+            log.workouts[qlEditMode.index] = entry;
+        } else {
+            log.workouts.push(entry);
+        }
+        if (isToday) { saveLog(); renderStreak(); } else { saveLogForDate(targetDate, log); }
+        if (weight && !qlEditMode) checkPersonalRecord({ exercises: [exercise], weight });
+        if (isToday) addBubble('ai', `✅ Logged ${summary}.`);
 
     } else if (qlCurrentTab === 'run') {
         const distance = parseFloat(document.getElementById('qlDistance').value) || 0;
@@ -3913,15 +4015,22 @@ function saveQuickLog() {
         const profile = loadProfile();
         const runCal = Math.round(distance * (parseFloat(profile.weight) || 185) * 0.63);
         const summary = `${distance} mile run${location ? ' at ' + location : ''}${duration ? ` in ${duration}min` : ''}`;
-        const entry = { type: 'run', summary, distance, duration: duration || null, pace: pace || null, avgHeartRate: hr || null, caloriesBurned: runCal, location: location || null, time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) };
-        addRunCard(entry);
-        todayLog.workouts.push(entry);
-        saveLog(); renderStreak(); renderMacroBar();
-        const runPR = checkRunPR(distance, duration);
-        const prMsg = runPR ? (runPR.isFirst ? ` 🏆 First ${runPR.label} on record!` : ` 🏆 NEW ${runPR.label} PR — ${runPR.timeStr}!`) : '';
-        addBubble('ai', `✅ Logged ${summary} — ${runCal} cal burned.${prMsg}`);
+        const entry = { type: 'run', summary, distance, duration: duration || null, pace: pace || null, avgHeartRate: hr || null, caloriesBurned: runCal, location: location || null, time: qlEditMode ? (log.workouts[qlEditMode.index]?.time || now) : now };
+        if (qlEditMode && qlEditMode.type === 'workout') {
+            log.workouts[qlEditMode.index] = entry;
+        } else {
+            log.workouts.push(entry);
+        }
+        if (isToday) { addRunCard(entry); saveLog(); renderStreak(); renderMacroBar(); } else { saveLogForDate(targetDate, log); }
+        if (!qlEditMode) {
+            const runPR = checkRunPR(distance, duration);
+            const prMsg = runPR ? (runPR.isFirst ? ` 🏆 First ${runPR.label} on record!` : ` 🏆 NEW ${runPR.label} PR — ${runPR.timeStr}!`) : '';
+            if (isToday) addBubble('ai', `✅ Logged ${summary} — ${runCal} cal burned.${prMsg}`);
+        }
     }
 
+    qlTargetDate = null;
+    qlEditMode   = null;
     // Clear and close
     ['qlMealName','qlCal','qlProtein','qlCarbs','qlFat','qlExercise','qlSets','qlReps','qlWeight','qlMuscles','qlDistance','qlDuration','qlPace','qlHR','qlLocation'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('quickLogOverlay').classList.remove('open');
@@ -3954,15 +4063,16 @@ function renderMonthlyView() {
             try {
                 const log = JSON.parse(localStorage.getItem(k));
                 if (!monthMap[month]) monthMap[month] = {};
-                if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], notes: [] };
+                if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], meals: [], notes: [] };
                 (log.workouts || []).forEach(w => monthMap[month][dateStr].workouts.push(w));
+                (log.meals || []).forEach(meal => monthMap[month][dateStr].meals.push(meal));
             } catch(_) {}
         }
         if (k.startsWith('fittrack_note_')) {
             const dateStr = k.replace('fittrack_note_', '');
             const month = dateStr.slice(0, 7);
             if (!monthMap[month]) monthMap[month] = {};
-            if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], notes: [] };
+            if (!monthMap[month][dateStr]) monthMap[month][dateStr] = { workouts: [], meals: [], notes: [] };
             monthMap[month][dateStr].notes = loadNotes(dateStr);
         }
     }
@@ -3992,16 +4102,33 @@ function renderMonthlyView() {
                     <div style="font-size:16px;font-weight:800;color:var(--orange);">${dayNum}</div>
                 </div>
                 <div style="flex:1;">`;
-            data.workouts.forEach(w => {
+            data.workouts.forEach((w, wIdx) => {
                 const setsReps = (w.sets && w.reps) ? `${w.sets}x${w.reps}${w.weight ? ' @ ' + w.weight + 'lbs' : ''}` : '';
                 const muscles = (w.muscleGroups || []).slice(0,3).join(', ');
                 const isRun = w.type === 'run';
-                html += `<div style="font-size:13px;font-weight:700;margin-bottom:1px;">${escHtml(w.summary)}</div>
-                    ${setsReps ? `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;">${setsReps}</div>` : ''}
-                    ${muscles && !isRun ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${muscles}</div>` : ''}
-                    ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}${w.location ? ' · 📍 ' + escHtml(w.location) : ''}</div>` : ''}`;
+                html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1px;">
+                    <div style="font-size:13px;font-weight:700;">${escHtml(w.summary)}</div>
+                    <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
+                        <span onclick="openItemEdit('${dateStr}','workout',${wIdx})" style="font-size:10px;color:var(--text-dim);cursor:pointer;padding:1px 4px;border:1px solid var(--border);border-radius:4px;">✏️</span>
+                        <span onclick="deleteLogItem('${dateStr}','workout',${wIdx})" style="font-size:10px;color:#ff6b6b;cursor:pointer;padding:1px 4px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
+                    </div>
+                </div>
+                ${setsReps ? `<div style="font-size:11px;color:var(--orange);margin-bottom:2px;">${setsReps}</div>` : ''}
+                ${muscles && !isRun ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${muscles}</div>` : ''}
+                ${isRun && w.distance ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${w.distance} mi${w.pace ? ' · ' + w.pace + '/mi' : ''}${w.caloriesBurned ? ' · ' + w.caloriesBurned + ' cal' : ''}${w.location ? ' · 📍 ' + escHtml(w.location) : ''}</div>` : ''}`;
             });
-            if (!data.workouts.length) html += `<div style="font-size:12px;color:var(--text-dim);">Rest day</div>`;
+            if (!data.workouts.length && !data.meals.length) html += `<div style="font-size:12px;color:var(--text-dim);">Rest day</div>`;
+            if (data.meals && data.meals.length) {
+                data.meals.forEach((meal, mIdx) => {
+                    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px;">
+                        <div style="font-size:12px;color:var(--text-dim);">🍽️ ${escHtml(meal.summary)}${meal.calories ? ` <span style="color:var(--orange);">${meal.calories}cal</span>` : ''}</div>
+                        <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
+                            <span onclick="openItemEdit('${dateStr}','meal',${mIdx})" style="font-size:10px;color:var(--text-dim);cursor:pointer;padding:1px 4px;border:1px solid var(--border);border-radius:4px;">✏️</span>
+                            <span onclick="deleteLogItem('${dateStr}','meal',${mIdx})" style="font-size:10px;color:#ff6b6b;cursor:pointer;padding:1px 4px;border:1px solid rgba(255,60,60,0.3);border-radius:4px;">✕</span>
+                        </div>
+                    </div>`;
+                });
+            }
             if (data.notes && data.notes.length) {
                 data.notes.forEach((n, i) => {
                     html += `<div onclick="openNoteEdit('${dateStr}', ${i})" style="font-size:12px;color:var(--text-dim);font-style:italic;margin-top:4px;cursor:pointer;padding:4px 8px;background:var(--bg3);border-radius:6px;">${n.time ? `<span style="font-size:10px;color:var(--orange);font-weight:700;margin-right:4px;font-style:normal;">${n.time}</span>` : ''}📓 "${escHtml(n.text)}" <span style="font-size:10px;font-style:normal;">✏️</span></div>`;
