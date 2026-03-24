@@ -2580,6 +2580,8 @@ MEAL (only when user says they ate/had/consumed something):
 - SERVINGS RULE: If user mentions a quantity (e.g. "2 chicken thighs", "3 eggs"), set "servings" to that number and set macros to PER-SINGLE-SERVING values. If no quantity mentioned, set "servings":1 and macros are for the whole thing.
 - If asking about macros only → message only, no log.
 - If macros are uncertain (tea, water, etc.) → ask for nutrition info, no log.
+- BRANDED PRODUCTS: If the user mentions a specific branded product (protein powder, bar, shake, supplement) you don't have verified data for, ask them to check the label rather than guessing. Do not invent macros for unfamiliar brands.
+- PROTEIN POWDER BASELINE: A typical single protein powder scoop = ~120 cal, 25g protein, 3g carbs, 2g fat. If you must estimate an unknown protein powder, use this as the baseline — never exceed 30g protein per scoop.
 - Always estimate macros. Use actual food name as summary.
 - CALORIES RULE: calories = (protein×4)+(carbs×4)+(fat×9). Always derive from macros, never guess separately.
 - MESSAGE RULE: Never quote calorie/macro numbers in message text. Just react to the food. The card shows the numbers.
