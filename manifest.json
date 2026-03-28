@@ -1,6 +1,6 @@
 {
-  "name": "FitTrack AI",
-  "short_name": "FitTrack",
+  "name": "FitTrack Plus",
+  "short_name": "FitTrack+",
   "description": "Your AI-powered personal fitness and nutrition tracker",
   "start_url": "/FitTrackAI/",
   "display": "standalone",

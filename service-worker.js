@@ -1,7 +1,9 @@
-const CACHE = 'fittrack-v3';
+const CACHE = 'fittrack-v4';
 const ASSETS = [
   '/FitTrackAI/',
   '/FitTrackAI/index.html',
+  '/FitTrackAI/style.css',
+  '/FitTrackAI/app.js',
   '/FitTrackAI/manifest.json'
 ];
 

@@ -125,7 +125,7 @@ async function loadFromSupabase() {
             localStorage.setItem(row.data_key, row.data_value);
         }
     });
-    } catch (e) { console.warn('FitTrack cloud load failed:', e.message); }
+    } catch (e) { console.warn('FitTrack+ cloud load failed:', e.message); }
 }
 
 async function deleteKeyFromSupabase(dataKey) {
@@ -133,7 +133,7 @@ async function deleteKeyFromSupabase(dataKey) {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return;
         await _supabase.from('user_data').delete().eq('user_id', user.id).eq('data_key', dataKey);
-    } catch (e) { console.warn('FitTrack delete sync failed:', e.message); }
+    } catch (e) { console.warn('FitTrack+ delete sync failed:', e.message); }
 }
 
 async function syncToSupabase() {
@@ -149,8 +149,8 @@ async function syncToSupabase() {
     }
     if (rows.length === 0) return;
     const { error } = await _supabase.from('user_data').upsert(rows, { onConflict: 'user_id,data_key' });
-    if (error) console.warn('FitTrack sync failed:', error.message);
-    } catch (e) { console.warn('FitTrack sync failed:', e.message); }
+    if (error) console.warn('FitTrack+ sync failed:', error.message);
+    } catch (e) { console.warn('FitTrack+ sync failed:', e.message); }
 }
 
 async function signOutUser() {
@@ -1600,7 +1600,7 @@ function getTodayProgramDay() {
 }
 
 
-const SYSTEM = `You are FitTrack AI — a personal fitness and nutrition assistant. Always respond with a valid JSON object: {"message": "..."} or {"message": "...", "log": {...}}.
+const SYSTEM = `You are FitTrack Plus — a personal fitness and nutrition assistant. Always respond with a valid JSON object: {"message": "..."} or {"message": "...", "log": {...}}.
 
 STYLE: 1-3 sentences max. Direct, fun, motivating. Add a quick joke about the food or exercise. Only go longer if asked for a plan or explanation. Occasionally use 1 emoji at the end of a response when it fits naturally — often none is fine too.
 
@@ -3293,7 +3293,7 @@ function addWelcome() {
     const todayDay = getTodayProgramDay();
     const programMsg = todayDay ? ` Today is your ${todayDay.label} — say "what's my workout today?" when you're ready.` : '';
     if (!profileComplete) {
-        addBubble('ai', `${greet}! 👋 Welcome to FitTrack AI! Before we get started, tap the ⚙️ settings icon in the top right and fill in your name, age, weight, and height. That way I can give you accurate calorie burn, BMR, and macro info.`);
+        addBubble('ai', `${greet}! 👋 Welcome to FitTrack Plus! Before we get started, tap the ⚙️ settings icon in the top right and fill in your name, age, weight, and height. That way I can give you accurate calorie burn, BMR, and macro info.`);
     } else if (!aiName) {
         addBubble('ai', `${greet}${nameStr}! 💪 Before we get into it — I don't have a name yet. What would you like to call me?`);
     } else {
@@ -3348,7 +3348,7 @@ if ('serviceWorker' in navigator) {
             }
         });
     } catch (e) {
-        console.warn('FitTrack init failed:', e.message);
+        console.warn('FitTrack+ init failed:', e.message);
         document.getElementById('authOverlay').style.display = 'flex';
     }
 })();
