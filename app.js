@@ -347,7 +347,6 @@ function confirmMealLog(id) {
         carbs:    get('carbs'),
         fat:      get('fat')
     };
-    addMealCard(final);
     todayLog.meals.push({
         summary:  final.summary,
         calories: final.calories,
@@ -356,6 +355,7 @@ function confirmMealLog(id) {
         fat:      final.fat,
         time:     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+    addMealCard(final, todayLog.meals.length - 1);
     saveLog();
     renderStreak();
     renderMacroBar();
@@ -415,12 +415,14 @@ function addWorkoutCard(data) {
     scrollBottom();
 }
 
-function addMealCard(data) {
+function addMealCard(data, mealIndex) {
     removeEmptyState();
+    const idx = mealIndex !== undefined ? mealIndex : todayLog.meals.length - 1;
     const div = document.createElement('div');
     div.className = 'message ai';
+    div.dataset.mealIndex = idx;
     div.innerHTML = `
-        <div class="log-card">
+        <div class="log-card" style="cursor:pointer;" onclick="editMealCard(this, ${idx})">
             <div class="log-card-header">
                 <div class="log-card-icon">🥗</div>
                 <div>
@@ -446,9 +448,134 @@ function addMealCard(data) {
                     <div class="macro-label">Fat</div>
                 </div>
             </div>
+            <div style="text-align:center;font-size:10px;color:var(--text-dim);margin-top:8px;">Tap to edit</div>
         </div>`;
     document.getElementById('messages').appendChild(div);
     scrollBottom();
+}
+
+function editMealCard(cardEl, mealIndex) {
+    const meal = todayLog.meals[mealIndex];
+    if (!meal) return;
+    const id = 'edit_' + Date.now();
+    const inp = (field, label, val) => `
+        <div>
+            <div style="font-size:10px;color:#888;margin-bottom:3px;">${label}</div>
+            <input type="number" id="${id}_${field}" value="${val}"
+                style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;border-radius:6px;
+                       padding:6px 8px;color:#f1f1f1;font-size:13px;font-family:inherit;">
+        </div>`;
+    const parent = cardEl.closest('.message');
+    parent.innerHTML = `
+        <div class="log-card" style="border-color:#fb923c;">
+            <div style="font-size:10px;font-weight:700;color:#fb923c;letter-spacing:1px;margin-bottom:10px;">EDIT MEAL</div>
+            <div style="margin-bottom:10px;">
+                <div style="font-size:10px;color:#888;margin-bottom:3px;">FOOD NAME</div>
+                <input type="text" id="${id}_name" value="${escHtml(meal.summary)}"
+                    style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;border-radius:6px;
+                           padding:6px 8px;color:#f1f1f1;font-size:13px;font-family:inherit;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                ${inp('cal', 'Calories', meal.calories || 0)}
+                ${inp('prot', 'Protein (g)', meal.protein || 0)}
+                ${inp('carbs', 'Carbs (g)', meal.carbs || 0)}
+                ${inp('fat', 'Fat (g)', meal.fat || 0)}
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="saveMealEdit('${id}', ${mealIndex})"
+                    style="flex:1;background:#fb923c;border:none;border-radius:8px;padding:10px;
+                           color:#000;font-weight:700;font-size:13px;cursor:pointer;">✓ Save</button>
+                <button onclick="deleteMealFromCard(${mealIndex})"
+                    style="background:#2a2a2a;border:1px solid #ff3333;border-radius:8px;padding:10px;
+                           color:#ff3333;font-weight:700;font-size:13px;cursor:pointer;">🗑️</button>
+                <button onclick="cancelMealEdit(this, ${mealIndex})"
+                    style="flex:1;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:10px;
+                           color:#f1f1f1;font-weight:700;font-size:13px;cursor:pointer;">✕ Cancel</button>
+            </div>
+        </div>`;
+    scrollBottom();
+}
+
+function saveMealEdit(id, mealIndex) {
+    const meal = todayLog.meals[mealIndex];
+    if (!meal) return;
+    const nameEl = document.getElementById(id + '_name');
+    meal.summary  = nameEl?.value.trim() || meal.summary;
+    meal.calories = parseInt(document.getElementById(id + '_cal')?.value) || 0;
+    meal.protein  = parseInt(document.getElementById(id + '_prot')?.value) || 0;
+    meal.carbs    = parseInt(document.getElementById(id + '_carbs')?.value) || 0;
+    meal.fat      = parseInt(document.getElementById(id + '_fat')?.value) || 0;
+    saveLog();
+    renderMacroBar();
+    // Replace edit form with updated card
+    const cards = document.querySelectorAll('.message.ai');
+    cards.forEach(c => {
+        if (c.querySelector(`#${id}_name`)) {
+            c.innerHTML = '';
+            const temp = document.createElement('div');
+            addMealCardInto(c, meal, mealIndex);
+        }
+    });
+}
+
+function addMealCardInto(parent, data, idx) {
+    parent.dataset.mealIndex = idx;
+    parent.innerHTML = `
+        <div class="log-card" style="cursor:pointer;" onclick="editMealCard(this, ${idx})">
+            <div class="log-card-header">
+                <div class="log-card-icon">🥗</div>
+                <div>
+                    <div class="log-card-title">Meal Logged</div>
+                    <div class="log-card-sub">${escHtml(data.summary)}</div>
+                </div>
+            </div>
+            <div class="macro-row">
+                <div class="macro-item">
+                    <div class="macro-value">${data.calories}</div>
+                    <div class="macro-label">Cal</div>
+                </div>
+                <div class="macro-item">
+                    <div class="macro-value">${data.protein}g</div>
+                    <div class="macro-label">Protein</div>
+                </div>
+                <div class="macro-item">
+                    <div class="macro-value">${data.carbs}g</div>
+                    <div class="macro-label">Carbs</div>
+                </div>
+                <div class="macro-item">
+                    <div class="macro-value">${data.fat}g</div>
+                    <div class="macro-label">Fat</div>
+                </div>
+            </div>
+            <div style="text-align:center;font-size:10px;color:var(--text-dim);margin-top:8px;">Tap to edit</div>
+        </div>`;
+}
+
+function cancelMealEdit(btn, mealIndex) {
+    const meal = todayLog.meals[mealIndex];
+    if (!meal) return;
+    const parent = btn.closest('.message');
+    addMealCardInto(parent, meal, mealIndex);
+}
+
+function deleteMealFromCard(mealIndex) {
+    if (!confirm('Delete this meal?')) return;
+    todayLog.meals.splice(mealIndex, 1);
+    saveLog();
+    renderMacroBar();
+    // Remove the card from chat and re-index remaining cards
+    const allCards = document.querySelectorAll('.message.ai[data-meal-index]');
+    allCards.forEach(c => {
+        const i = parseInt(c.dataset.mealIndex);
+        if (i === mealIndex) {
+            c.remove();
+        } else if (i > mealIndex) {
+            const newIdx = i - 1;
+            c.dataset.mealIndex = newIdx;
+            const logCard = c.querySelector('.log-card');
+            if (logCard) logCard.setAttribute('onclick', `editMealCard(this, ${newIdx})`);
+        }
+    });
 }
 
 function addRunCard(data) {
@@ -1187,8 +1314,8 @@ async function lookupBarcode(barcode) {
         };
 
         addBubble('ai', `Found **${name}** (per ${serving}) — ${logData.calories} cal, ${logData.protein}g protein, ${logData.carbs}g carbs, ${logData.fat}g fat. Logged!`);
-        addMealCard(logData);
         todayLog.meals.push({ ...logData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        addMealCard(logData, todayLog.meals.length - 1);
         saveLog();
         renderMacroBar();
 
@@ -1248,8 +1375,8 @@ function logSavedFood(i) {
     const foods = loadFoodLibrary();
     const f = foods[i];
     const logData = { summary: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat };
-    addMealCard(logData);
     todayLog.meals.push({ ...logData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    addMealCard(logData, todayLog.meals.length - 1);
     saveLog();
     renderMacroBar();
 }
@@ -2969,7 +3096,7 @@ function saveQuickLog() {
         } else {
             log.meals.push(fullEntry);
         }
-        if (isToday) { addMealCard(entry); saveLog(); renderMacroBar(); } else { saveLogForDate(targetDate, log); }
+        if (isToday) { addMealCard(entry, todayLog.meals.length - 1); saveLog(); renderMacroBar(); } else { saveLogForDate(targetDate, log); }
         // Auto-save to food library if not already there
         const foods = loadFoodLibrary();
         if (!foods.find(f => f.name.toLowerCase() === name.toLowerCase())) {
