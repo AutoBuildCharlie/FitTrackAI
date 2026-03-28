@@ -27,10 +27,20 @@ async function handleAuth() {
     }
     document.getElementById('authBtn').textContent = 'Loading...';
     let result;
-    if (authMode === 'signin') {
-        result = await _supabase.auth.signInWithPassword({ email, password });
-    } else {
-        result = await _supabase.auth.signUp({ email, password });
+    try {
+        if (authMode === 'signin') {
+            result = await _supabase.auth.signInWithPassword({ email, password });
+        } else {
+            result = await _supabase.auth.signUp({ email, password });
+        }
+    } catch (e) {
+        errEl.style.background = 'rgba(255,50,50,0.1)';
+        errEl.style.borderColor = 'rgba(255,50,50,0.3)';
+        errEl.style.color = '#ff6b6b';
+        errEl.textContent = 'Network error — check your connection and try again.';
+        errEl.style.display = 'block';
+        document.getElementById('authBtn').textContent = authMode === 'signin' ? 'Sign In' : 'Sign Up';
+        return;
     }
     if (result.error) {
         errEl.style.background = 'rgba(255,50,50,0.1)';
@@ -58,17 +68,27 @@ async function handleAuth() {
 }
 
 async function signInWithGoogle() {
-    await _supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: 'https://autobuildcharlie.github.io/FitTrackAI/' }
-    });
+    try {
+        await _supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: 'https://autobuildcharlie.github.io/FitTrackAI/' }
+        });
+    } catch (e) {
+        const errEl = document.getElementById('authError');
+        errEl.style.background = 'rgba(255,50,50,0.1)';
+        errEl.style.borderColor = 'rgba(255,50,50,0.3)';
+        errEl.style.color = '#ff6b6b';
+        errEl.textContent = 'Google sign-in failed — check your connection.';
+        errEl.style.display = 'block';
+    }
 }
 
 async function loadFromSupabase() {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return;
-    const { data, error } = await _supabase.from('user_data').select('data_key, data_value').eq('user_id', user.id);
-    if (error || !data) return;
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return;
+        const { data, error } = await _supabase.from('user_data').select('data_key, data_value').eq('user_id', user.id);
+        if (error || !data) return;
     data.forEach(row => {
         if (row.data_value === null) return;
         const localVal = localStorage.getItem(row.data_key);
@@ -105,15 +125,19 @@ async function loadFromSupabase() {
             localStorage.setItem(row.data_key, row.data_value);
         }
     });
+    } catch (e) { console.warn('FitTrack cloud load failed:', e.message); }
 }
 
 async function deleteKeyFromSupabase(dataKey) {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (!user) return;
-    await _supabase.from('user_data').delete().eq('user_id', user.id).eq('data_key', dataKey);
+    try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return;
+        await _supabase.from('user_data').delete().eq('user_id', user.id).eq('data_key', dataKey);
+    } catch (e) { console.warn('FitTrack delete sync failed:', e.message); }
 }
 
 async function syncToSupabase() {
+    try {
     const { data: { user } } = await _supabase.auth.getUser();
     if (!user) return;
     const rows = [];
@@ -126,10 +150,11 @@ async function syncToSupabase() {
     if (rows.length === 0) return;
     const { error } = await _supabase.from('user_data').upsert(rows, { onConflict: 'user_id,data_key' });
     if (error) console.warn('FitTrack sync failed:', error.message);
+    } catch (e) { console.warn('FitTrack sync failed:', e.message); }
 }
 
 async function signOutUser() {
-    await _supabase.auth.signOut();
+    try { await _supabase.auth.signOut(); } catch(_) {}
     document.getElementById('settingsOverlay').classList.remove('open');
     document.getElementById('authOverlay').style.display = 'flex';
 }
@@ -139,6 +164,13 @@ async function initApp() {
     await loadFromSupabase();
     apiKey = localStorage.getItem('fittrack_groq_key') || 'proxy';
     todayLog = loadTodayLog();
+    // Set milestone to current level so old milestones don't re-fire on load
+    const initCals = todayLog.meals.reduce((a, m) => a + (m.calories || 0), 0);
+    const initGoals = loadGoals();
+    const initPct = initGoals.calories > 0 ? initCals / initGoals.calories * 100 : 0;
+    if (initPct >= 100) lastMilestonePct = 100;
+    else if (initPct >= 75) lastMilestonePct = 75;
+    else if (initPct >= 50) lastMilestonePct = 50;
     renderSummary();
     renderMacroBar();
     renderWater();
@@ -177,7 +209,7 @@ function getLogForDate(dateStr) {
     const today = localDateStr();
     if (!dateStr || dateStr === today) return todayLog;
     const raw = localStorage.getItem(dateKey(dateStr));
-    return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+    return safeParse(raw, { workouts: [], meals: [] });
 }
 
 function setLogForDate(dateStr, log) {
@@ -189,6 +221,7 @@ function setLogForDate(dateStr, log) {
         renderMacroBar();
     } else {
         localStorage.setItem(dateKey(dateStr), JSON.stringify(log));
+        syncToSupabase();
     }
 }
 
@@ -200,9 +233,13 @@ function pushUndo(dateStr) {
     if (undoStack.length > 10) undoStack.shift();
 }
 
+function safeParse(raw, fallback) {
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch(_) { return fallback; }
+}
+
 function loadTodayLog() {
-    const raw = localStorage.getItem(todayKey());
-    return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+    return safeParse(localStorage.getItem(todayKey()), { workouts: [], meals: [] });
 }
 
 function saveLog() {
@@ -464,8 +501,7 @@ function hideTyping() {
 //  SUMMARY PANEL
 // ─────────────────────────────────────────
 function loadGoals() {
-    const raw = localStorage.getItem('fittrack_goals');
-    return raw ? JSON.parse(raw) : { calories: 2000, protein: 150, carbs: 200, fat: 65, proteinPct: 30, carbsPct: 40, fatPct: 30 };
+    return safeParse(localStorage.getItem('fittrack_goals'), { calories: 2000, protein: 150, carbs: 200, fat: 65, proteinPct: 30, carbsPct: 40, fatPct: 30 });
 }
 
 function selectMacroPreset(btn, pPct, cPct, fPct) {
@@ -572,8 +608,7 @@ function renderProfileDisplay() {
 }
 
 function loadPRs() {
-    const raw = localStorage.getItem('fittrack_prs');
-    return raw ? JSON.parse(raw) : {};
+    return safeParse(localStorage.getItem('fittrack_prs'), {});
 }
 
 // Run PR distances in miles
@@ -586,8 +621,7 @@ const RUN_PR_DISTANCES = [
 ];
 
 function loadRunPRs() {
-    const raw = localStorage.getItem('fittrack_run_prs');
-    return raw ? JSON.parse(raw) : {};
+    return safeParse(localStorage.getItem('fittrack_run_prs'), {});
 }
 
 function checkRunPR(distance, duration) {
@@ -635,7 +669,7 @@ function getStreak() {
         const key = 'fittrack_' + localDateStr(d);
         const raw = localStorage.getItem(key);
         if (!raw) break;
-        const log = JSON.parse(raw);
+        const log = safeParse(raw, { workouts: [], meals: [] });
         if ((log.workouts && log.workouts.length > 0) || (log.meals && log.meals.length > 0)) {
             streak++;
         } else {
@@ -682,17 +716,20 @@ function addWater() {
     if (count < goal) {
         localStorage.setItem(getWaterKey(), count + 1);
         renderWater();
+        syncToSupabase();
     }
 }
 
 function setWater(n) {
     localStorage.setItem(getWaterKey(), n);
     renderWater();
+    syncToSupabase();
 }
 
 function resetWater() {
     localStorage.setItem(getWaterKey(), 0);
     renderWater();
+    syncToSupabase();
 }
 
 function renderMacroBar() {
@@ -709,11 +746,12 @@ function renderMacroBar() {
     document.getElementById('barFat').textContent      = tot.fat + 'g';
 
     const goals = loadGoals();
-    const pct = tot.calories / goals.calories * 100;
+    const safePct = (val, goal) => goal > 0 ? Math.min(val / goal * 100, 100) : 0;
+    const pct = goals.calories > 0 ? tot.calories / goals.calories * 100 : 0;
     document.getElementById('fillCalories').style.width = Math.min(pct, 100) + '%';
-    document.getElementById('fillProtein').style.width  = Math.min(tot.protein  / goals.protein  * 100, 100) + '%';
-    document.getElementById('fillCarbs').style.width    = Math.min(tot.carbs    / goals.carbs    * 100, 100) + '%';
-    document.getElementById('fillFat').style.width      = Math.min(tot.fat      / goals.fat      * 100, 100) + '%';
+    document.getElementById('fillProtein').style.width  = safePct(tot.protein, goals.protein) + '%';
+    document.getElementById('fillCarbs').style.width    = safePct(tot.carbs, goals.carbs) + '%';
+    document.getElementById('fillFat').style.width      = safePct(tot.fat, goals.fat) + '%';
 
     checkCalorieMilestone(pct);
 
@@ -782,7 +820,7 @@ function renderWeeklyView() {
         const dateStr = localDateStr(date);
         const key = 'fittrack_' + dateStr;
         const raw = localStorage.getItem(key);
-        const log = raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+        const log = safeParse(raw, { workouts: [], meals: [] });
         const isToday = dateStr === todayStr;
         const dayLabel = dayNames[date.getDay()];
 
@@ -889,7 +927,7 @@ function renderWeeklyView() {
     dates.forEach(date => {
         const raw = localStorage.getItem('fittrack_' + localDateStr(date));
         if (!raw) { wRestDays++; return; }
-        const log = JSON.parse(raw);
+        const log = safeParse(raw, { workouts: [], meals: [] });
         const hasMeals = (log.meals || []).length > 0;
         const hasWorkouts = (log.workouts || []).length > 0;
         if (hasMeals) {
@@ -934,6 +972,7 @@ function deleteDayData(dateStr) {
         renderMacroBar();
     } else {
         localStorage.removeItem('fittrack_' + dateStr);
+        deleteKeyFromSupabase('fittrack_' + dateStr);
     }
     renderWeeklyView();
 }
@@ -946,7 +985,10 @@ function resetAllData() {
         const key = localStorage.key(i);
         if (key && /^fittrack_\d{4}-\d{2}-\d{2}$/.test(key)) keysToRemove.push(key);
     }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
+    keysToRemove.forEach(k => {
+        localStorage.removeItem(k);
+        deleteKeyFromSupabase(k);
+    });
     todayLog = { workouts: [], meals: [] };
     saveLog();
     renderMacroBar();
@@ -992,11 +1034,14 @@ async function handleImageFile(e) {
         document.getElementById('sendBtn').disabled = true;
 
         try {
+            const visionCtrl = new AbortController();
+            const visionTimeout = setTimeout(() => visionCtrl.abort(), 30000);
             const res = await fetch('https://fittrack-proxy.aestheticcal22.workers.dev', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                signal: visionCtrl.signal,
                 body: JSON.stringify({
                     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
                     messages: [{
@@ -1009,7 +1054,9 @@ async function handleImageFile(e) {
                     max_tokens: 512
                 })
             });
+            clearTimeout(visionTimeout);
 
+            if (!res.ok) throw new Error('Vision API error (' + res.status + '). Try again.');
             const data = await res.json();
             if (!data.choices || !data.choices[0] || !data.choices[0].message) {
                 throw new Error(data.error?.message || 'Vision API did not respond. Try a clearer photo.');
@@ -1101,6 +1148,8 @@ async function stopBarcodeScanner() {
         try { await barcodeScanner.stop(); } catch (_) {}
         barcodeScanner = null;
     }
+    const readerEl = document.getElementById('barcode-reader');
+    if (readerEl) readerEl.innerHTML = '';
     document.getElementById('barcodeOverlay').classList.remove('open');
 }
 
@@ -1110,7 +1159,11 @@ async function lookupBarcode(barcode) {
     document.getElementById('sendBtn').disabled = true;
 
     try {
-        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const barcodeCtrl = new AbortController();
+        const barcodeTimeout = setTimeout(() => barcodeCtrl.abort(), 10000);
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`, { signal: barcodeCtrl.signal });
+        clearTimeout(barcodeTimeout);
+        if (!res.ok) throw new Error('Barcode lookup failed (' + res.status + ')');
         const data = await res.json();
 
         hideTyping();
@@ -1154,8 +1207,7 @@ document.getElementById('closeBarcodeBtn').addEventListener('click', stopBarcode
 //  ADD GRUB + FOOD LIBRARY
 // ─────────────────────────────────────────
 function loadFoodLibrary() {
-    const raw = localStorage.getItem('fittrack_foods');
-    return raw ? JSON.parse(raw) : [];
+    return safeParse(localStorage.getItem('fittrack_foods'), []);
 }
 
 function saveFoodLibrary(foods) {
@@ -1341,8 +1393,7 @@ function deleteNoteFromView() {
 //  SETTINGS
 // ─────────────────────────────────────────
 function loadProfile() {
-    const raw = localStorage.getItem('fittrack_profile');
-    return raw ? JSON.parse(raw) : { name: '', age: '', weight: '', heightFt: '', heightIn: '', hrMax: '', fitnessLevel: '', fitnessGoal: '' };
+    return safeParse(localStorage.getItem('fittrack_profile'), { name: '', age: '', weight: '', heightFt: '', heightIn: '', hrMax: '', fitnessLevel: '', fitnessGoal: '' });
 }
 
 function openSettings() {
@@ -1405,12 +1456,12 @@ function loadAiName() {
 }
 
 function loadProgram() {
-    const raw = localStorage.getItem('fittrack_program');
-    return raw ? JSON.parse(raw) : null;
+    return safeParse(localStorage.getItem('fittrack_program'), null);
 }
 
 function saveProgram(program) {
     localStorage.setItem('fittrack_program', JSON.stringify(program));
+    syncToSupabase();
 }
 
 function getTodayProgramDay() {
@@ -1534,7 +1585,7 @@ async function askClaude(userMessage) {
             const key = 'fittrack_' + localDateStr(d);
             const raw = localStorage.getItem(key);
             if (raw) {
-                const log = JSON.parse(raw);
+                const log = safeParse(raw, { workouts: [] });
                 (log.workouts || []).forEach(w => {
                     if (w.muscleGroups) recentMuscles.push(...w.muscleGroups);
                 });
@@ -1668,11 +1719,14 @@ async function askClaude(userMessage) {
             ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
         ];
 
+        const chatCtrl = new AbortController();
+        const chatTimeout = setTimeout(() => chatCtrl.abort(), 30000);
         const res = await fetch('https://fittrack-proxy.aestheticcal22.workers.dev', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
+            signal: chatCtrl.signal,
             body: JSON.stringify({
                 model: 'llama-3.3-70b-versatile',
                 messages,
@@ -1680,16 +1734,21 @@ async function askClaude(userMessage) {
                 response_format: { type: 'json_object' }
             })
         });
+        clearTimeout(chatTimeout);
 
         if (!res.ok) {
             const e = await res.json().catch(() => ({}));
             // Retry without JSON mode if generation failed
             if (e.error?.code === 'failed_generation' || (e.error?.message || '').includes('failed_generation') || (e.error?.message || '').includes('Failed to generate JSON')) {
+                const retryCtrl = new AbortController();
+                const retryTimeout = setTimeout(() => retryCtrl.abort(), 30000);
                 const retryRes = await fetch('https://fittrack-proxy.aestheticcal22.workers.dev', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: retryCtrl.signal,
                     body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 300 })
                 });
+                clearTimeout(retryTimeout);
                 if (!retryRes.ok) throw new Error(`HTTP ${retryRes.status}`);
                 const retryData = await retryRes.json();
                 const retryText = retryData.choices?.[0]?.message?.content || '';
@@ -1784,7 +1843,11 @@ async function askClaude(userMessage) {
             } else if (target === 'meals') {
                 todayLog.meals = [];
             } else if (target === 'week') {
-                getWeekDates().forEach(d => localStorage.removeItem('fittrack_' + localDateStr(d)));
+                getWeekDates().forEach(d => {
+                    const k = 'fittrack_' + localDateStr(d);
+                    localStorage.removeItem(k);
+                    deleteKeyFromSupabase(k);
+                });
                 todayLog = { workouts: [], meals: [] };
             } else {
                 todayLog = { workouts: [], meals: [] };
@@ -1808,6 +1871,7 @@ async function askClaude(userMessage) {
             };
             localStorage.setItem('fittrack_goals', JSON.stringify(updated));
             renderMacroBar();
+            syncToSupabase();
         } else if (logData?.type === 'workout') {
             addWorkoutCard(logData);
             todayLog.workouts.push({
@@ -1838,6 +1902,7 @@ async function askClaude(userMessage) {
             };
             localStorage.setItem('fittrack_profile', JSON.stringify(updated));
             renderProfileDisplay();
+            syncToSupabase();
         } else if (logData?.type === 'run') {
             const runProfile = loadProfile();
             const runWeight = parseFloat(runProfile.weight) || 185;
@@ -2003,6 +2068,7 @@ async function askClaude(userMessage) {
         } else if (logData?.type === 'ai_name') {
             if (logData.name) {
                 localStorage.setItem('fittrack_ai_name', logData.name.trim());
+                syncToSupabase();
             }
         } else if (logData?.type === 'save_program') {
             if (logData.program) {
@@ -2042,6 +2108,7 @@ async function askClaude(userMessage) {
                 }
             }
             localStorage.setItem('fittrack_weight_log', JSON.stringify(wLog));
+            syncToSupabase();
         } else if (logData?.type === 'water') {
             const wDate = logData.date || localDateStr();
             const wKey  = 'fittrack_water_' + wDate;
@@ -2061,8 +2128,10 @@ async function askClaude(userMessage) {
                 localStorage.setItem('fittrack_water_goal', logData.goal);
                 renderWater();
             }
+            syncToSupabase();
         } else if (logData?.type === 'clear_program') {
             localStorage.removeItem('fittrack_program');
+            deleteKeyFromSupabase('fittrack_program');
         } else if (logData?.type === 'undo') {
             if (undoStack.length > 0) {
                 const { dateStr, snap } = undoStack.pop();
@@ -2174,12 +2243,12 @@ function showProgressTab(tab) {
 //  GOALS
 // ─────────────────────────────────────────
 function loadGoalsList() {
-    const raw = localStorage.getItem('fittrack_goals_list');
-    return raw ? JSON.parse(raw) : [];
+    return safeParse(localStorage.getItem('fittrack_goals_list'), []);
 }
 
 function saveGoalsList(goals) {
     localStorage.setItem('fittrack_goals_list', JSON.stringify(goals));
+    syncToSupabase();
 }
 
 function deleteGoal(id) {
@@ -2250,8 +2319,7 @@ function addGoalManual() {
 let weightChartInstance = null;
 
 function loadWeightLog() {
-    const raw = localStorage.getItem('fittrack_weight_log');
-    return raw ? JSON.parse(raw) : [];
+    return safeParse(localStorage.getItem('fittrack_weight_log'), []);
 }
 
 function logBodyweight() {
@@ -2362,9 +2430,8 @@ function getAllLogs() {
         const key = 'fittrack_' + localDateStr(d);
         const raw = localStorage.getItem(key);
         if (raw) {
-            const log = JSON.parse(raw);
-            log._date = localDateStr(d);
-            logs.push(log);
+            const log = safeParse(raw, null);
+            if (log) { log._date = localDateStr(d); logs.push(log); }
         }
     }
     return logs.reverse();
@@ -2487,7 +2554,7 @@ function renderRunningChart() {
     });
 
     // Update monthly miles label
-    const labelEl = document.querySelector('#progressRunning div[style*="Miles before smiles"]');
+    const labelEl = document.getElementById('runningLabel');
     if (labelEl) labelEl.innerHTML = `Miles before smiles <span style="color:var(--orange);font-weight:800;margin-left:8px;">${monthlyMiles.toFixed(1)} mi this month</span>`;
 
     const canvas = document.getElementById('runningChart');
@@ -2582,8 +2649,7 @@ let qlTargetDate = null;   // set when opening quick log for a past day
 let qlEditMode   = null;   // { dateStr, type, index } when editing existing item
 
 function loadLogForDate(dateStr) {
-    const raw = localStorage.getItem('fittrack_' + dateStr);
-    return raw ? JSON.parse(raw) : { workouts: [], meals: [] };
+    return safeParse(localStorage.getItem('fittrack_' + dateStr), { workouts: [], meals: [] });
 }
 
 function saveLogForDate(dateStr, log) {
@@ -3118,6 +3184,7 @@ function checkDateRollover() {
     if (now !== _activeDate) {
         _activeDate = now;
         todayLog = loadTodayLog();
+        lastMilestonePct = 0;
         renderMacroBar();
         renderSummary();
         renderWater();
@@ -3137,20 +3204,24 @@ setInterval(checkDateRollover, 60000);
 //  INIT
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js');
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
 
 (async () => {
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (session) {
-        await initApp();
-    } else {
+    try {
+        const { data: { session } } = await _supabase.auth.getSession();
+        if (session) {
+            await initApp();
+        } else {
+            document.getElementById('authOverlay').style.display = 'flex';
+        }
+        _supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session && document.getElementById('authOverlay').style.display !== 'none') {
+                await initApp();
+            }
+        });
+    } catch (e) {
+        console.warn('FitTrack init failed:', e.message);
         document.getElementById('authOverlay').style.display = 'flex';
     }
-    _supabase.auth.onAuthStateChange(async (event, session) => {
-        // Only run initApp on a real new sign-in, not on token refresh or existing session restore
-        if (event === 'SIGNED_IN' && session && document.getElementById('authOverlay').style.display !== 'none') {
-            await initApp();
-        }
-    });
 })();
