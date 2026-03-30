@@ -193,7 +193,6 @@ async function initApp() {
 let apiKey = 'proxy';
 let history = [];
 let todayLog = loadTodayLog();
-let pendingMealScan = null; // holds per-serving data while waiting for serving count
 
 // ================================================================
 //  DATA & STORAGE
@@ -3039,7 +3038,6 @@ function qlToggleMuscle(m) {
     setTimeout(qlShowExercises, 0); // defer until after click bubbles to document
 }
 
-function qlMuscleTyped() {}
 
 // Get exercise options for the selected muscle groups
 function qlGetExercisesForSelected() {
