@@ -1,3 +1,6 @@
+/* ================================================================
+   RESET & CSS VARIABLES
+   ================================================================ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
@@ -13,6 +16,9 @@
     --border: rgba(255, 107, 0, 0.3);
 }
 
+/* ================================================================
+   LAYOUT — Body
+   ================================================================ */
 body {
     background: var(--bg);
     color: var(--text);
@@ -23,7 +29,9 @@ body {
     overflow: hidden;
 }
 
-/* ── HEADER ── */
+/* ================================================================
+   HEADER
+   ================================================================ */
 .header {
     display: flex;
     align-items: center;
@@ -78,14 +86,18 @@ body {
     box-shadow: 0 0 10px rgba(255,107,0,0.15);
 }
 
-/* ── MAIN ── */
+/* ================================================================
+   MAIN LAYOUT
+   ================================================================ */
 .main {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
-/* ── CHAT ── */
+/* ================================================================
+   CHAT AREA & MESSAGES
+   ================================================================ */
 .chat-area {
     flex: 1;
     display: flex;
@@ -103,16 +115,21 @@ body {
     scroll-behavior: smooth;
 }
 
+/* Thin orange scrollbar for the chat feed */
 .messages::-webkit-scrollbar { width: 3px; }
 .messages::-webkit-scrollbar-thumb { background: var(--orange-dim); border-radius: 2px; }
 
-/* QUICK LOG */
+/* ================================================================
+   QUICK LOG INPUTS
+   ================================================================ */
 .ql-tab { flex:1; background:#1a1a1a; border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text-dim); font-size:13px; cursor:pointer; transition:all 0.15s; }
 .ql-tab.active { background:rgba(255,107,0,0.15); border-color:var(--orange); color:var(--orange); font-weight:700; }
 .ql-input { width:100%; background:#1a1a1a; border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-size:14px; outline:none; }
 .ql-input:focus { border-color:var(--orange); }
 
-/* ── MESSAGE BUBBLES ── */
+/* ================================================================
+   MESSAGE BUBBLES & ANIMATIONS
+   ================================================================ */
 .message {
     max-width: 88%;
     animation: fadeUp 0.25s ease;
@@ -172,7 +189,9 @@ body {
     box-shadow: 0 4px 24px rgba(255,107,0,0.5), 0 0 40px rgba(255,107,0,0.2);
 }
 
-/* ── LOG CARDS ── */
+/* ================================================================
+   LOG CARDS
+   ================================================================ */
 .log-card {
     background: linear-gradient(160deg, #1c1610 0%, var(--bg2) 100%);
     border: 1px solid var(--orange);
@@ -273,7 +292,9 @@ body {
     letter-spacing: 0.4px;
 }
 
-/* ── INPUT AREA ── */
+/* ================================================================
+   INPUT AREA
+   ================================================================ */
 .input-area {
     padding: 12px 16px 18px;
     background: rgba(17, 17, 17, 0.75);
@@ -331,6 +352,7 @@ body {
 
 .mic-btn:hover { border-color: var(--orange); color: var(--orange); }
 
+/* Pulsing glow used on the mic button while recording */
 @keyframes glow-pulse {
     0%, 100% { box-shadow: 0 0 22px var(--orange-glow-strong); }
     50%       { box-shadow: 0 0 40px var(--orange-glow-strong), 0 0 70px var(--orange-glow); }
@@ -361,7 +383,9 @@ body {
 
 .send-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-/* ── SUMMARY PANEL ── */
+/* ================================================================
+   SUMMARY PANEL
+   ================================================================ */
 .summary-panel {
     width: 270px;
     background: var(--bg2);
@@ -446,7 +470,9 @@ body {
     text-transform: uppercase;
 }
 
-/* ── EMPTY STATE ── */
+/* ================================================================
+   EMPTY STATE & CHIPS
+   ================================================================ */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -499,7 +525,9 @@ body {
     box-shadow: 0 0 10px var(--orange-glow);
 }
 
-/* ── TYPING ── */
+/* ================================================================
+   TYPING INDICATOR
+   ================================================================ */
 .typing {
     display: flex;
     align-items: center;
@@ -530,7 +558,9 @@ body {
     50%       { opacity: 1;   transform: translateY(-4px); }
 }
 
-/* ── MODAL ── */
+/* ================================================================
+   OVERLAYS & MODALS
+   ================================================================ */
 .overlay {
     display: none;
     position: fixed;
@@ -640,7 +670,9 @@ body {
     box-shadow: 0 0 30px var(--orange-glow-strong);
 }
 
-/* ── MACRO BAR ── */
+/* ================================================================
+   MACRO BAR
+   ================================================================ */
 .macro-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -695,12 +727,16 @@ body {
     transition: width 0.6s ease;
 }
 
+/* Color-coded progress fills — one per macro nutrient */
 .cal-fill     { background: linear-gradient(90deg, #FF6B00, #FF9500); box-shadow: 0 0 6px rgba(255,107,0,0.6); }
 .protein-fill { background: linear-gradient(90deg, #00C9FF, #0080FF); box-shadow: 0 0 6px rgba(0,180,255,0.5); }
 .carbs-fill   { background: linear-gradient(90deg, #A855F7, #7C3AED); box-shadow: 0 0 6px rgba(168,85,247,0.5); }
 .fat-fill     { background: linear-gradient(90deg, #10B981, #059669); box-shadow: 0 0 6px rgba(16,185,129,0.5); }
 
-/* ── MOBILE: hide summary panel ── */
+/* ================================================================
+   RESPONSIVE / MEDIA QUERIES
+   ================================================================ */
+/* Mobile: hide summary panel */
 @media (max-width: 600px) {
     .summary-panel { display: none !important; }
 }

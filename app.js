@@ -1,12 +1,13 @@
-// ─────────────────────────────────────────
-//  SUPABASE
-// ─────────────────────────────────────────
+// ================================================================
+//  SUPABASE & AUTHENTICATION
+// ================================================================
 const SUPABASE_URL = 'https://kuyhoycnldcbgmkaaejl.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_aZ771usWQ33-LZg2EiLH1g_6Ceke5Ex';
 const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let authMode = 'signin';
 
+// Toggle between sign-in and sign-up mode
 function toggleAuthMode() {
     authMode = authMode === 'signin' ? 'signup' : 'signin';
     document.getElementById('authBtn').textContent = authMode === 'signin' ? 'Sign In' : 'Sign Up';
@@ -15,6 +16,7 @@ function toggleAuthMode() {
     document.getElementById('authError').style.display = 'none';
 }
 
+// Handle email/password sign-in or sign-up
 async function handleAuth() {
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
@@ -67,6 +69,7 @@ async function handleAuth() {
     await initApp();
 }
 
+// Sign in using Google OAuth
 async function signInWithGoogle() {
     try {
         await _supabase.auth.signInWithOAuth({
@@ -83,6 +86,7 @@ async function signInWithGoogle() {
     }
 }
 
+// Pull all user data from Supabase cloud into localStorage
 async function loadFromSupabase() {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -128,6 +132,7 @@ async function loadFromSupabase() {
     } catch (e) { console.warn('FitTrack+ cloud load failed:', e.message); }
 }
 
+// Delete a single key from the Supabase cloud storage
 async function deleteKeyFromSupabase(dataKey) {
     try {
         const { data: { user } } = await _supabase.auth.getUser();
@@ -136,6 +141,7 @@ async function deleteKeyFromSupabase(dataKey) {
     } catch (e) { console.warn('FitTrack+ delete sync failed:', e.message); }
 }
 
+// Push all localStorage fittrack_ keys up to Supabase cloud
 async function syncToSupabase() {
     try {
     const { data: { user } } = await _supabase.auth.getUser();
@@ -153,12 +159,14 @@ async function syncToSupabase() {
     } catch (e) { console.warn('FitTrack+ sync failed:', e.message); }
 }
 
+// Sign out and show the login screen
 async function signOutUser() {
     try { await _supabase.auth.signOut(); } catch(_) {}
     document.getElementById('settingsOverlay').classList.remove('open');
     document.getElementById('authOverlay').style.display = 'flex';
 }
 
+// Boot up the app after login — load data, render UI, show welcome
 async function initApp() {
     document.getElementById('authOverlay').style.display = 'none';
     await loadFromSupabase();
@@ -179,17 +187,19 @@ async function initApp() {
     if (!apiKey) { openSettings(); } else { addWelcome(); }
 }
 
-// ─────────────────────────────────────────
-//  STATE
-// ─────────────────────────────────────────
+// ================================================================
+//  APP STATE
+// ================================================================
 let apiKey = 'proxy';
 let history = [];
 let todayLog = loadTodayLog();
 let pendingMealScan = null; // holds per-serving data while waiting for serving count
 
-// ─────────────────────────────────────────
-//  DATA
-// ─────────────────────────────────────────
+// ================================================================
+//  DATA & STORAGE
+// ================================================================
+
+// Return a YYYY-MM-DD string for a given date (or today)
 function localDateStr(date) {
     date = date || new Date();
     const y = date.getFullYear();
@@ -197,14 +207,17 @@ function localDateStr(date) {
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
+// Get the localStorage key for today's log
 function todayKey() {
     return 'fittrack_' + localDateStr();
 }
 
+// Get the localStorage key for any date string
 function dateKey(dateStr) {
     return 'fittrack_' + dateStr;
 }
 
+// Retrieve the workout/meal log for a specific date
 function getLogForDate(dateStr) {
     const today = localDateStr();
     if (!dateStr || dateStr === today) return todayLog;
@@ -212,6 +225,7 @@ function getLogForDate(dateStr) {
     return safeParse(raw, { workouts: [], meals: [] });
 }
 
+// Save the workout/meal log for a specific date
 function setLogForDate(dateStr, log) {
     const today = localDateStr();
     if (!dateStr || dateStr === today) {
@@ -227,21 +241,25 @@ function setLogForDate(dateStr, log) {
 
 // Undo stack — stores {date, log} snapshots before edits/deletes
 const undoStack = [];
+// Save a snapshot of a day's log before editing or deleting
 function pushUndo(dateStr) {
     const snap = JSON.parse(JSON.stringify(getLogForDate(dateStr)));
     undoStack.push({ dateStr, snap });
     if (undoStack.length > 10) undoStack.shift();
 }
 
+// Parse JSON safely, returning a fallback if it fails
 function safeParse(raw, fallback) {
     if (!raw) return fallback;
     try { return JSON.parse(raw); } catch(_) { return fallback; }
 }
 
+// Load today's workout/meal log from localStorage
 function loadTodayLog() {
     return safeParse(localStorage.getItem(todayKey()), { workouts: [], meals: [] });
 }
 
+// Save today's log to localStorage and sync to cloud
 function saveLog() {
     localStorage.setItem(todayKey(), JSON.stringify(todayLog));
     renderSummary();
@@ -249,23 +267,28 @@ function saveLog() {
     syncToSupabase();
 }
 
-// ─────────────────────────────────────────
-//  UI HELPERS
-// ─────────────────────────────────────────
+// ================================================================
+//  UI HELPERS & LOG CARDS
+// ================================================================
+
+// Open a full-screen image preview
 function openLightbox(src) {
     const el = document.getElementById('lightboxOverlay');
     document.getElementById('lightboxImg').src = src;
     el.style.display = 'flex';
 }
+// Close the full-screen image preview
 function closeLightbox() {
     document.getElementById('lightboxOverlay').style.display = 'none';
 }
 
+// Remove the "no messages yet" placeholder
 function removeEmptyState() {
     const el = document.getElementById('emptyState');
     if (el) el.remove();
 }
 
+// Scroll the chat to the bottom
 function scrollBottom() {
     const m = document.getElementById('messages');
     m.scrollTop = m.scrollHeight;
@@ -274,6 +297,7 @@ function scrollBottom() {
 // Pending meal confirmations — keyed by unique card ID
 const pendingMealLogs = {};
 
+// Show an editable meal confirmation card before logging
 function showMealConfirm(logData) {
     removeEmptyState();
     // Always recalculate calories from macros — never trust AI's calorie estimate
@@ -326,6 +350,7 @@ function showMealConfirm(logData) {
     scrollBottom();
 }
 
+// Recalculate macro fields when user changes serving count
 function updateMealServings(id, bCal, bProt, bCarbs, bFat) {
     const s = parseFloat(document.getElementById(id + '_servings')?.value) || 1;
     document.getElementById(id + '_cal').value   = Math.round(bCal   * s);
@@ -334,6 +359,7 @@ function updateMealServings(id, bCal, bProt, bCarbs, bFat) {
     document.getElementById(id + '_fat').value   = Math.round(bFat   * s);
 }
 
+// Confirm and save a meal from the review card
 function confirmMealLog(id) {
     const logData = pendingMealLogs[id];
     if (!logData) return;
@@ -363,6 +389,7 @@ function confirmMealLog(id) {
     delete pendingMealLogs[id];
 }
 
+// Add a chat message bubble (user or AI)
 function addBubble(role, text) {
     removeEmptyState();
     const wrap = document.createElement('div');
@@ -372,6 +399,7 @@ function addBubble(role, text) {
     scrollBottom();
 }
 
+// Escape HTML special characters to prevent injection
 function escHtml(str) {
     return str
         .replace(/&/g, '&amp;')
@@ -380,6 +408,7 @@ function escHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
+// Display a workout log card in the chat
 function addWorkoutCard(data) {
     removeEmptyState();
     const muscles = (data.muscleGroups || []).map(m => `<span class="tag">${m}</span>`).join('');
@@ -415,6 +444,7 @@ function addWorkoutCard(data) {
     scrollBottom();
 }
 
+// Display a meal log card in the chat (tappable to edit)
 function addMealCard(data, mealIndex) {
     removeEmptyState();
     const idx = mealIndex !== undefined ? mealIndex : todayLog.meals.length - 1;
@@ -454,6 +484,7 @@ function addMealCard(data, mealIndex) {
     scrollBottom();
 }
 
+// Turn a meal card into an editable form
 function editMealCard(cardEl, mealIndex) {
     const meal = todayLog.meals[mealIndex];
     if (!meal) return;
@@ -496,6 +527,7 @@ function editMealCard(cardEl, mealIndex) {
     scrollBottom();
 }
 
+// Save edits made to a meal card
 function saveMealEdit(id, mealIndex) {
     const meal = todayLog.meals[mealIndex];
     if (!meal) return;
@@ -518,6 +550,7 @@ function saveMealEdit(id, mealIndex) {
     });
 }
 
+// Render a meal card inside an existing parent element
 function addMealCardInto(parent, data, idx) {
     parent.dataset.mealIndex = idx;
     parent.innerHTML = `
@@ -551,6 +584,7 @@ function addMealCardInto(parent, data, idx) {
         </div>`;
 }
 
+// Cancel editing and restore the original meal card
 function cancelMealEdit(btn, mealIndex) {
     const meal = todayLog.meals[mealIndex];
     if (!meal) return;
@@ -558,6 +592,7 @@ function cancelMealEdit(btn, mealIndex) {
     addMealCardInto(parent, meal, mealIndex);
 }
 
+// Delete a meal and remove its card from the chat
 function deleteMealFromCard(mealIndex) {
     if (!confirm('Delete this meal?')) return;
     todayLog.meals.splice(mealIndex, 1);
@@ -578,6 +613,7 @@ function deleteMealFromCard(mealIndex) {
     });
 }
 
+// Display a run log card in the chat with distance, pace, HR
 function addRunCard(data) {
     removeEmptyState();
     const div = document.createElement('div');
@@ -609,6 +645,7 @@ function addRunCard(data) {
     scrollBottom();
 }
 
+// Show the typing indicator dots
 function showTyping() {
     removeEmptyState();
     const div = document.createElement('div');
@@ -619,18 +656,24 @@ function showTyping() {
     scrollBottom();
 }
 
+// Remove the typing indicator dots
 function hideTyping() {
     const el = document.getElementById('typing');
     if (el) el.remove();
 }
 
-// ─────────────────────────────────────────
-//  SUMMARY PANEL
-// ─────────────────────────────────────────
+// ================================================================
+//  GOALS, MACROS & FITNESS DATA
+// ================================================================
+
+// ── GOALS & MACRO TARGETS ──────────────────────────────────
+
+// Load daily calorie/macro goals from localStorage
 function loadGoals() {
     return safeParse(localStorage.getItem('fittrack_goals'), { calories: 2000, protein: 150, carbs: 200, fat: 65, proteinPct: 30, carbsPct: 40, fatPct: 30 });
 }
 
+// Apply a preset macro split (e.g. 30/40/30)
 function selectMacroPreset(btn, pPct, cPct, fPct) {
     document.querySelectorAll('.macro-preset-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -640,6 +683,7 @@ function selectMacroPreset(btn, pPct, cPct, fPct) {
     recalcMacros();
 }
 
+// Recalculate macro grams from calorie goal and percentages
 function recalcMacros() {
     const cal     = parseInt(document.getElementById('goalCalories').value) || 0;
     const pPct    = parseFloat(document.getElementById('goalProteinPct').value) || 0;
@@ -679,6 +723,7 @@ function recalcMacros() {
         </div>`;
 }
 
+// Save the calorie/macro goals to localStorage
 function saveGoals() {
     const cal  = parseInt(document.getElementById('goalCalories').value) || 2000;
     const pPct = parseFloat(document.getElementById('goalProteinPct').value) || 30;
@@ -697,6 +742,9 @@ function saveGoals() {
     return goals;
 }
 
+// ── BMR & HEART RATE ───────────────────────────────────────
+
+// Calculate basal metabolic rate using Mifflin-St Jeor formula
 function calcBMR(p) {
     // Mifflin-St Jeor (male): 10×kg + 6.25×cm - 5×age + 5
     if (!p.weight || !p.age) return null;
@@ -707,6 +755,7 @@ function calcBMR(p) {
     return Math.round(10 * kg + 6.25 * cm - 5 * age + 5);
 }
 
+// Determine which heart rate zone (1-5) a BPM falls into
 function getHRZone(hr, hrMax) {
     const pct = (hr / hrMax) * 100;
     if (pct < 60) return { zone: 1, color: '#60a5fa', name: 'Zone 1 — Recovery' };
@@ -716,12 +765,16 @@ function getHRZone(hr, hrMax) {
     return { zone: 5, color: '#f87171', name: 'Zone 5 — Max' };
 }
 
+// Get max heart rate — user-set or estimated from age
 function getEffectiveHRMax(p) {
     if (p.hrMax) return { value: parseFloat(p.hrMax), source: 'user' };
     if (p.age)   return { value: Math.round(220 - parseFloat(p.age)), source: 'estimated' };
     return null;
 }
 
+// ── PROFILE ────────────────────────────────────────────────
+
+// Show age, weight, BMR summary in the header
 function renderProfileDisplay() {
     const p = loadProfile();
     const el = document.getElementById('profileDisplay');
@@ -734,6 +787,9 @@ function renderProfileDisplay() {
     el.textContent = parts.join(' · ');
 }
 
+// ── PERSONAL RECORDS ───────────────────────────────────────
+
+// Load strength personal records from localStorage
 function loadPRs() {
     return safeParse(localStorage.getItem('fittrack_prs'), {});
 }
@@ -747,10 +803,12 @@ const RUN_PR_DISTANCES = [
     { key: 'full_marathon',label: 'Full Marathon',   miles: 26.219, tol: 0.5  },
 ];
 
+// Load running race PRs from localStorage
 function loadRunPRs() {
     return safeParse(localStorage.getItem('fittrack_run_prs'), {});
 }
 
+// Check if a run beats a race distance PR (5K, 10K, etc.)
 function checkRunPR(distance, duration) {
     if (!distance || !duration) return null;
     const match = RUN_PR_DISTANCES.find(d => Math.abs(distance - d.miles) <= d.tol);
@@ -769,6 +827,7 @@ function checkRunPR(distance, duration) {
     return null;
 }
 
+// Check if a workout weight beats the strength PR for that exercise
 function checkPersonalRecord(logData) {
     if (!logData.exercises || !logData.weight) return;
     const prs = loadPRs();
@@ -787,6 +846,9 @@ function checkPersonalRecord(logData) {
     }
 }
 
+// ── STREAK ─────────────────────────────────────────────────
+
+// Count consecutive days with logged activity
 function getStreak() {
     let streak = 0;
     const today = new Date();
@@ -806,25 +868,29 @@ function getStreak() {
     return streak;
 }
 
+// Placeholder — streak is displayed in the welcome message
 function renderStreak() {
     // Streak is shown in the welcome message, not the header
 }
 
-// ─────────────────────────────────────────
-//  WATER TRACKING
-// ─────────────────────────────────────────
+// ── WATER TRACKING ─────────────────────────────────────────
+
+// Get the localStorage key for today's water count
 function getWaterKey() {
     return 'fittrack_water_' + localDateStr();
 }
 
+// Get the daily water goal (default 8 glasses)
 function getWaterGoal() {
     return parseInt(localStorage.getItem('fittrack_water_goal')) || 8;
 }
 
+// Get how many glasses of water logged today
 function getWaterCount() {
     return parseInt(localStorage.getItem(getWaterKey())) || 0;
 }
 
+// Draw the water tracking glass indicators
 function renderWater() {
     const count  = getWaterCount();
     const goal   = getWaterGoal();
@@ -837,6 +903,7 @@ function renderWater() {
     countEl.textContent = `${count} / ${goal}`;
 }
 
+// Add one glass of water
 function addWater() {
     const count = getWaterCount();
     const goal  = getWaterGoal();
@@ -847,18 +914,23 @@ function addWater() {
     }
 }
 
+// Set water count to an exact number (tap a glass)
 function setWater(n) {
     localStorage.setItem(getWaterKey(), n);
     renderWater();
     syncToSupabase();
 }
 
+// Reset water count to zero
 function resetWater() {
     localStorage.setItem(getWaterKey(), 0);
     renderWater();
     syncToSupabase();
 }
 
+// ── MACRO BAR & MILESTONES ─────────────────────────────────
+
+// Update the calorie/macro progress bars at the top
 function renderMacroBar() {
     const tot = todayLog.meals.reduce((a, m) => ({
         calories: a.calories + m.calories,
@@ -892,6 +964,7 @@ function renderMacroBar() {
 
 let lastMilestonePct = 0;
 
+// Show a fun message when hitting 50%, 75%, or 100% of calorie goal
 function checkCalorieMilestone(pct) {
     const milestones = [
         { threshold: 100, msgs: [
@@ -923,8 +996,14 @@ function checkCalorieMilestone(pct) {
     if (pct < 50) lastMilestonePct = 0;
 }
 
+// No-op — kept for backward compatibility
 function renderSummary() {} // kept for compatibility
 
+// ================================================================
+//  WEEKLY VIEW
+// ================================================================
+
+// Get the last 7 days as Date objects (today first)
 function getWeekDates() {
     // Returns the last 7 days: today first, then 6 days back
     const today = new Date();
@@ -937,6 +1016,7 @@ function getWeekDates() {
     return dates;
 }
 
+// Build and display the 7-day log view with totals
 function renderWeeklyView() {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dates = getWeekDates();
@@ -1090,6 +1170,7 @@ function renderWeeklyView() {
     document.getElementById('weeklyContent').innerHTML = html;
 }
 
+// Clear all data for a specific day
 function deleteDayData(dateStr) {
     if (!confirm('Clear all data for this day?')) return;
     const todayStr = localDateStr();
@@ -1104,6 +1185,7 @@ function deleteDayData(dateStr) {
     renderWeeklyView();
 }
 
+// Nuke all workout and meal data across all days
 function resetAllData() {
     if (!confirm('Reset ALL workout and meal data? This cannot be undone.')) return;
     // Remove all day-log keys across all time (not just current week)
@@ -1123,9 +1205,9 @@ function resetAllData() {
     alert('All data cleared.');
 }
 
-// ─────────────────────────────────────────
-//  CAMERA / NUTRITION SCAN
-// ─────────────────────────────────────────
+// ================================================================
+//  CAMERA & PHOTO SCANNING
+// ================================================================
 document.getElementById('cameraBtn').addEventListener('click', (e) => {
     e.stopPropagation();
     const menu = document.getElementById('cameraMenu');
@@ -1138,6 +1220,7 @@ document.addEventListener('click', () => {
     if (menu) menu.style.display = 'none';
 });
 
+// Process a photo (nutrition label, run data, or gym screenshot) via vision AI
 async function handleImageFile(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1242,11 +1325,12 @@ async function handleImageFile(e) {
 document.getElementById('cameraInput').addEventListener('change', handleImageFile);
 document.getElementById('libraryInput').addEventListener('change', handleImageFile);
 
-// ─────────────────────────────────────────
+// ================================================================
 //  BARCODE SCANNER
-// ─────────────────────────────────────────
+// ================================================================
 let barcodeScanner = null;
 
+// Open the camera and start scanning for barcodes
 async function startBarcodeScanner() {
     document.getElementById('barcodeOverlay').classList.add('open');
     document.getElementById('barcodeStatus').textContent = 'Starting camera...';
@@ -1270,6 +1354,7 @@ async function startBarcodeScanner() {
     }
 }
 
+// Stop the barcode camera and close the overlay
 async function stopBarcodeScanner() {
     if (barcodeScanner) {
         try { await barcodeScanner.stop(); } catch (_) {}
@@ -1280,6 +1365,7 @@ async function stopBarcodeScanner() {
     document.getElementById('barcodeOverlay').classList.remove('open');
 }
 
+// Look up a barcode in Open Food Facts and log the product
 async function lookupBarcode(barcode) {
     addBubble('user', `🔍 Scanned barcode: ${barcode}`);
     showTyping();
@@ -1330,17 +1416,21 @@ async function lookupBarcode(barcode) {
 document.getElementById('barcodeBtn').addEventListener('click', startBarcodeScanner);
 document.getElementById('closeBarcodeBtn').addEventListener('click', stopBarcodeScanner);
 
-// ─────────────────────────────────────────
-//  ADD GRUB + FOOD LIBRARY
-// ─────────────────────────────────────────
+// ================================================================
+//  FOOD LIBRARY
+// ================================================================
+
+// Load the user's saved foods list
 function loadFoodLibrary() {
     return safeParse(localStorage.getItem('fittrack_foods'), []);
 }
 
+// Save the user's foods list to localStorage
 function saveFoodLibrary(foods) {
     localStorage.setItem('fittrack_foods', JSON.stringify(foods));
 }
 
+// Render the saved foods list with log/edit/delete buttons
 function renderFoodLibrary() {
     const foods = loadFoodLibrary();
     const container = document.getElementById('myFoodsList');
@@ -1371,6 +1461,7 @@ function renderFoodLibrary() {
         </div>`).join('');
 }
 
+// Quick-log a saved food to today's meals
 function logSavedFood(i) {
     const foods = loadFoodLibrary();
     const f = foods[i];
@@ -1381,11 +1472,13 @@ function logSavedFood(i) {
     renderMacroBar();
 }
 
+// Toggle the edit form for a saved food
 function editSavedFood(i) {
     const form = document.getElementById(`editForm_${i}`);
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 }
 
+// Save changes to a food's macros and recalculate calories
 function saveEditedFood(i) {
     const foods = loadFoodLibrary();
     const pEl = document.getElementById(`editP_${i}`);
@@ -1401,6 +1494,7 @@ function saveEditedFood(i) {
     renderFoodLibrary();
 }
 
+// Remove a food from the saved library
 function deleteSavedFood(i) {
     const foods = loadFoodLibrary();
     foods.splice(i, 1);
@@ -1408,6 +1502,10 @@ function deleteSavedFood(i) {
     renderFoodLibrary();
 }
 
+
+// ================================================================
+//  JOURNAL & NOTES
+// ================================================================
 
 document.getElementById('journalBtn').addEventListener('click', () => {
     openJournal();
@@ -1419,8 +1517,7 @@ document.getElementById('journalOverlay').addEventListener('click', e => {
 document.getElementById('noteEditOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) { e.currentTarget.classList.remove('open'); noteEditState = null; }
 });
-
-// ── JOURNAL ──────────────────────────────────────────────
+// Load all journal notes for a given date
 function loadNotes(dateStr) {
     const raw = localStorage.getItem('fittrack_note_' + dateStr);
     if (!raw) return [];
@@ -1438,6 +1535,7 @@ function loadNote(dateStr) {
     return loadNotes(dateStr).map(n => n.text).join(' | ');
 }
 
+// Save journal notes for a date (or delete if empty)
 function saveNotes(dateStr, notes) {
     const key = 'fittrack_note_' + dateStr;
     if (notes && notes.length) {
@@ -1456,6 +1554,7 @@ function saveNotes(dateStr, notes) {
     }
 }
 
+// Open the journal overlay for today
 function openJournal() {
     document.getElementById('journalDateLabel').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
     document.getElementById('journalNote').value = '';
@@ -1463,6 +1562,7 @@ function openJournal() {
     document.getElementById('journalOverlay').classList.add('open');
 }
 
+// Save a new journal entry with timestamp
 function saveJournal() {
     const text = document.getElementById('journalNote').value.trim();
     if (!text) return;
@@ -1478,6 +1578,7 @@ function saveJournal() {
 
 let noteEditState = null;
 
+// Open the edit overlay for an existing note
 function openNoteEdit(dateStr, index) {
     noteEditState = { dateStr, index };
     const notes = loadNotes(dateStr);
@@ -1489,6 +1590,7 @@ function openNoteEdit(dateStr, index) {
     document.getElementById('noteEditOverlay').classList.add('open');
 }
 
+// Save changes to an existing note
 function saveNoteEdit() {
     if (!noteEditState) return;
     const { dateStr, index } = noteEditState;
@@ -1503,6 +1605,7 @@ function saveNoteEdit() {
     if (isMonth) renderMonthlyView(); else renderWeeklyView();
 }
 
+// Delete a note from the weekly/monthly view
 function deleteNoteFromView() {
     if (!noteEditState) return;
     if (!confirm('Delete this note?')) return;
@@ -1516,13 +1619,16 @@ function deleteNoteFromView() {
     if (isMonth) renderMonthlyView(); else renderWeeklyView();
 }
 
-// ─────────────────────────────────────────
+// ================================================================
 //  SETTINGS
-// ─────────────────────────────────────────
+// ================================================================
+
+// Load the user's profile (name, age, weight, height, etc.)
 function loadProfile() {
     return safeParse(localStorage.getItem('fittrack_profile'), { name: '', age: '', weight: '', heightFt: '', heightIn: '', hrMax: '', fitnessLevel: '', fitnessGoal: '' });
 }
 
+// Open the settings overlay and populate all fields
 function openSettings() {
     document.getElementById('apiKeyInput').value = apiKey;
     document.getElementById('apiKeySection').style.display = 'none';
@@ -1549,6 +1655,7 @@ function openSettings() {
     document.getElementById('settingsOverlay').classList.add('open');
 }
 
+// Save all settings (API key, goals, profile) and close
 function saveSettings() {
     const key = document.getElementById('apiKeyInput').value.trim();
     if (key) { apiKey = key; localStorage.setItem('fittrack_groq_key', key); }
@@ -1575,22 +1682,27 @@ function saveSettings() {
     }
 }
 
-// ─────────────────────────────────────────
-//  CLAUDE API
-// ─────────────────────────────────────────
+// ================================================================
+//  AI CHAT ENGINE
+// ================================================================
+
+// Get the user's custom name for the AI assistant
 function loadAiName() {
     return localStorage.getItem('fittrack_ai_name') || '';
 }
 
+// Load the user's saved training program
 function loadProgram() {
     return safeParse(localStorage.getItem('fittrack_program'), null);
 }
 
+// Save the training program to localStorage and sync
 function saveProgram(program) {
     localStorage.setItem('fittrack_program', JSON.stringify(program));
     syncToSupabase();
 }
 
+// Get today's scheduled workout from the training program
 function getTodayProgramDay() {
     const program = loadProgram();
     if (!program) return null;
@@ -1600,6 +1712,7 @@ function getTodayProgramDay() {
 }
 
 
+// The system prompt that tells the AI how to behave and what JSON to return
 const SYSTEM = `You are FitTrack Plus — a personal fitness and nutrition assistant. Always respond with a valid JSON object: {"message": "..."} or {"message": "...", "log": {...}}.
 
 STYLE: 1-3 sentences max. Direct, fun, motivating. Add a quick joke about the food or exercise. Only go longer if asked for a plan or explanation. Occasionally use 1 emoji at the end of a response when it fits naturally — often none is fine too.
@@ -1670,6 +1783,7 @@ WORKOUT suggestions: Check muscles hit this week, suggest neglected ones.
 FORM questions: Explain clearly, recommend YouTube search: "search YouTube for '[Jeff Nippard/Athlean-X/Alan Thrall] [exercise]'" — never give actual URLs.`;
 
 
+// Send a message to the AI and process the response (log meals, workouts, etc.)
 async function askClaude(userMessage) {
     history.push({ role: 'user', content: userMessage });
 
@@ -1677,7 +1791,7 @@ async function askClaude(userMessage) {
     document.getElementById('sendBtn').disabled = true;
 
     try {
-        // ── LAZY CONTEXT — detect intent first so flags are available everywhere ──
+        // ── BUILD CONTEXT — detect intent and gather relevant data for the AI ──
         const msg = userMessage.toLowerCase();
         const isFood    = /eat|ate|had|meal|food|snack|calor|protein|carb|fat|macro|drink|drank|log.*food|nutrition|hunger|diet|breakfast|lunch|dinner|brunch|supper/.test(msg);
         const isRun     = /run|ran|mile|km|jog|cardio|pace|5k|10k|marathon|sprint|treadmill|bike|biked|cycl|walk|walked|swim|swam|elliptical|jump rope|steps|stair/.test(msg);
@@ -1841,6 +1955,7 @@ async function askClaude(userMessage) {
             return `\n\nPROTEIN ALERT: User has averaged ${Math.round(avg)}% of their protein goal (${g.protein}g/day) across ${dayPcts.length} logged days — below the 75% threshold. When food, macros, or muscle building comes up naturally, mention this once: let them know their protein has been averaging low and that hitting at least 75% of their protein goal consistently is key for building muscle. Be encouraging, not preachy. Only bring it up once per conversation.`;
         })();
 
+        // ── SEND TO API — build messages array and call the Groq proxy ──
         const messages = [
             { role: 'system', content: SYSTEM + foodContext + profileContext + hrZoneContext + workoutContext + weekContext + prContext + weightContext + runContext + runPRContext + macroContext + todayMealsContext + journalContext + goalsContext + nameContext + fitnessContext + programContext + proteinAlertContext },
             ...history.slice(-10).map(m => ({ role: m.role, content: m.content }))
@@ -1897,7 +2012,7 @@ async function askClaude(userMessage) {
 
         hideTyping();
 
-        // Parse JSON response (JSON mode guarantees valid JSON)
+        // ── PROCESS RESPONSE — parse the JSON and extract message + log data ──
         let logData = null;
         let displayText = fullText;
 
@@ -1920,6 +2035,7 @@ async function askClaude(userMessage) {
             return;
         }
 
+        // ── HANDLE LOG TYPES — process each type of log action from the AI ──
         function processLogItem(logData) {
 
         if (logData?.type === 'edit_run') {
@@ -2301,9 +2417,11 @@ async function askClaude(userMessage) {
     }
 }
 
-// ─────────────────────────────────────────
-//  SEND
-// ─────────────────────────────────────────
+// ================================================================
+//  SEND MESSAGE
+// ================================================================
+
+// Read user input and send it to the AI
 async function send() {
     const input = document.getElementById('textInput');
     const text = input.value.trim();
@@ -2317,19 +2435,16 @@ async function send() {
     await askClaude(text);
 }
 
+// Send a suggestion chip's text as if the user typed it
 function useChip(el) {
     const text = el.textContent.replace(/^[^\w]+/, '').trim();
     document.getElementById('textInput').value = text;
     send();
 }
 
-// ─────────────────────────────────────────
-//  VOICE
-// ─────────────────────────────────────────
-
-// ─────────────────────────────────────────
-//  TEXTAREA
-// ─────────────────────────────────────────
+// ================================================================
+//  INPUT HANDLING & EVENT LISTENERS
+// ================================================================
 const textInput = document.getElementById('textInput');
 textInput.addEventListener('input', () => {
     textInput.style.height = 'auto';
@@ -2351,8 +2466,15 @@ document.getElementById('progressOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
 
+// ================================================================
+//  PROGRESS & CHARTS
+// ================================================================
+
+// ── PROGRESS TABS ──────────────────────────────────────────
+
 let runningChartInstance = null;
 
+// Switch between strength, running, weight, and goals tabs
 function showProgressTab(tab) {
     ['strength','running','weight','goals'].forEach(t => {
         document.getElementById('progress' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = tab === t ? 'block' : 'none';
@@ -2366,24 +2488,27 @@ function showProgressTab(tab) {
     if (tab === 'goals')   renderGoalsTab();
 }
 
-// ─────────────────────────────────────────
-//  GOALS
-// ─────────────────────────────────────────
+// ── GOALS TAB ──────────────────────────────────────────────
+
+// Load the list of user fitness goals
 function loadGoalsList() {
     return safeParse(localStorage.getItem('fittrack_goals_list'), []);
 }
 
+// Save the goals list and sync to cloud
 function saveGoalsList(goals) {
     localStorage.setItem('fittrack_goals_list', JSON.stringify(goals));
     syncToSupabase();
 }
 
+// Delete a goal by ID
 function deleteGoal(id) {
     const goals = loadGoalsList().filter(g => g.id !== id);
     saveGoalsList(goals);
     renderGoalsTab();
 }
 
+// Render the goals list (active + achieved)
 function renderGoalsTab() {
     const goals = loadGoalsList();
     const container = document.getElementById('goalsList');
@@ -2424,6 +2549,7 @@ function renderGoalsTab() {
     container.innerHTML = html;
 }
 
+// Add a new goal from the text input
 function addGoalManual() {
     const input = document.getElementById('goalInput');
     const text = input.value.trim();
@@ -2440,15 +2566,15 @@ function addGoalManual() {
     syncToSupabase();
 }
 
-// ─────────────────────────────────────────
-//  BODYWEIGHT CHART
-// ─────────────────────────────────────────
+// ── BODYWEIGHT CHART ───────────────────────────────────────
 let weightChartInstance = null;
 
+// Load all bodyweight entries
 function loadWeightLog() {
     return safeParse(localStorage.getItem('fittrack_weight_log'), []);
 }
 
+// Log today's bodyweight and update the chart
 function logBodyweight() {
     const input = document.getElementById('weightLogInput');
     const w = parseFloat(input.value);
@@ -2469,6 +2595,7 @@ function logBodyweight() {
     renderProfileDisplay();
 }
 
+// Draw the bodyweight line chart with stats
 function renderWeightChart() {
     const log    = loadWeightLog();
     const canvas = document.getElementById('weightChart');
@@ -2549,6 +2676,7 @@ function renderWeightChart() {
         </div>`;
 }
 
+// Collect the last 90 days of log data for charts
 function getAllLogs() {
     const logs = [];
     for (let i = 0; i < 90; i++) {
@@ -2564,6 +2692,7 @@ function getAllLogs() {
     return logs.reverse();
 }
 
+// Open the progress overlay, default to running or strength
 function openProgress() {
     const hasRuns = (todayLog.workouts || []).some(w => w.type === 'run');
     if (hasRuns) {
@@ -2574,6 +2703,9 @@ function openProgress() {
     }
 }
 
+// ── STRENGTH CHART ─────────────────────────────────────────
+
+// Build the strength PRs list from workout history
 function renderStrengthChart() {
     const logs   = getAllLogs();
     const prsDiv = document.getElementById('strengthPRs');
@@ -2657,6 +2789,7 @@ function renderStrengthChart() {
     prsDiv.innerHTML = html;
 }
 
+// Show/hide older PRs beyond the top 3
 function toggleOldPRs() {
     const el  = document.getElementById('oldPRs');
     const btn = document.getElementById('oldPRsBtn');
@@ -2666,6 +2799,9 @@ function toggleOldPRs() {
     btn.textContent = open ? `▲ Hide older PRs` : `▼ See ${count} more PR${count > 1 ? 's' : ''}`;
 }
 
+// ── RUNNING CHART ──────────────────────────────────────────
+
+// Draw the running distance chart with stats and race PRs
 function renderRunningChart() {
     const logs = getAllLogs();
     const runs = [];
@@ -2770,15 +2906,21 @@ function renderRunningChart() {
         })()}`;
 }
 
-// ─── QUICK LOG ───
+// ================================================================
+//  QUICK LOG
+// ================================================================
+
+// ── QUICK LOG STATE ────────────────────────────────────────
 let qlCurrentTab = 'meal';
 let qlTargetDate = null;   // set when opening quick log for a past day
 let qlEditMode   = null;   // { dateStr, type, index } when editing existing item
 
+// Load a day's log for the quick log form
 function loadLogForDate(dateStr) {
     return safeParse(localStorage.getItem('fittrack_' + dateStr), { workouts: [], meals: [] });
 }
 
+// Save a day's log from the quick log form
 function saveLogForDate(dateStr, log) {
     localStorage.setItem('fittrack_' + dateStr, JSON.stringify(log));
     if (dateStr === localDateStr()) {
@@ -2790,6 +2932,7 @@ function saveLogForDate(dateStr, log) {
     refreshLogViews();
 }
 
+// Open the quick log modal for a specific past date
 function openQuickLogForDate(dateStr) {
     qlTargetDate = dateStr;
     qlEditMode = null;
@@ -2804,6 +2947,7 @@ function openQuickLogForDate(dateStr) {
     document.getElementById('quickLogOverlay').classList.add('open');
 }
 
+// Open quick log in edit mode for an existing meal/workout
 function openItemEdit(dateStr, type, index) {
     const log = loadLogForDate(dateStr);
     qlTargetDate = dateStr;
@@ -2839,6 +2983,7 @@ function openItemEdit(dateStr, type, index) {
     document.getElementById('quickLogOverlay').classList.add('open');
 }
 
+// Delete a specific meal or workout from a day's log
 function deleteLogItem(dateStr, type, index) {
     if (!confirm(`Delete this ${type}?`)) return;
     const log = loadLogForDate(dateStr);
@@ -2861,7 +3006,7 @@ document.getElementById('quickLogOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
 
-// ── STRENGTH QUICK LOG — MUSCLE & EXERCISE PICKERS ──────────
+// ── MUSCLE & EXERCISE PICKERS ──────────────────────────────
 const QL_MUSCLES = {
     'Chest':     ['Bench Press','Incline Bench Press','Decline Bench Press','Dumbbell Press','Incline Dumbbell Press','Dumbbell Fly','Cable Fly','Push-Up','Chest Dips','Chest Press Machine','Pec Deck'],
     'Back':      ['Pull-Up','Chin-Up','Lat Pulldown','Barbell Row','Dumbbell Row','Cable Row','T-Bar Row','Deadlift','Face Pull','Straight Arm Pulldown','Seated Cable Row','Hyperextensions'],
@@ -2876,6 +3021,7 @@ const QL_MUSCLES = {
 
 let qlSelectedMuscles = [];
 
+// Render muscle group selection chips
 function qlRenderMuscleChips() {
     const container = document.getElementById('qlMuscleChips');
     container.innerHTML = Object.keys(QL_MUSCLES).map(m => {
@@ -2884,6 +3030,7 @@ function qlRenderMuscleChips() {
     }).join('');
 }
 
+// Select or deselect a muscle group
 function qlToggleMuscle(m) {
     qlSelectedMuscles = qlSelectedMuscles[0] === m ? [] : [m];
     qlRenderMuscleChips();
@@ -2894,6 +3041,7 @@ function qlToggleMuscle(m) {
 
 function qlMuscleTyped() {}
 
+// Get exercise options for the selected muscle groups
 function qlGetExercisesForSelected() {
     if (!qlSelectedMuscles.length) return [];
     const exSet = new Set();
@@ -2905,6 +3053,7 @@ function qlSetModalHeight(tall) {
     document.querySelector('#quickLogOverlay .modal').style.minHeight = tall ? '720px' : '520px';
 }
 
+// Show the exercise dropdown list, filtered by muscle or search
 function qlShowExercises() {
     const list = document.getElementById('qlExerciseList');
     const filter = document.getElementById('qlExercise').value.toLowerCase();
@@ -2930,6 +3079,7 @@ function qlFilterExercises() {
     qlShowExercises();
 }
 
+// Fill in the exercise field when user picks from the list
 function qlPickExercise(name) {
     document.getElementById('qlExercise').value = name;
     document.getElementById('qlExerciseList').style.display = 'none';
@@ -2945,6 +3095,7 @@ document.addEventListener('click', e => {
     }
 });
 
+// Auto-calculate calories from protein/carbs/fat inputs
 function qlAutoCalc() {
     const p = parseFloat(document.getElementById('qlProtein').value) || 0;
     const c = parseFloat(document.getElementById('qlCarbs').value)   || 0;
@@ -2954,6 +3105,7 @@ function qlAutoCalc() {
     }
 }
 
+// Show saved foods as quick-fill buttons in the meal tab
 function renderQLSavedFoods() {
     const foods = loadFoodLibrary();
     const container = document.getElementById('qlSavedFoods');
@@ -2964,6 +3116,7 @@ function renderQLSavedFoods() {
         </div>`;
 }
 
+// Fill the meal form with a saved food's data
 function qlFillFood(i) {
     const f = loadFoodLibrary()[i];
     if (!f) return;
@@ -2976,6 +3129,7 @@ function qlFillFood(i) {
 
 let qlRecentMealData = [];
 
+// Show recently logged meals as one-tap re-log buttons
 function renderQLRecentMeals() {
     const container = document.getElementById('qlRecentMeals');
     if (!container) return;
@@ -3010,6 +3164,7 @@ function renderQLRecentMeals() {
         </div>`;
 }
 
+// Fill the meal form with a recent meal's data
 function qlLoadRecentMeal(idx) {
     const meal = qlRecentMealData[idx];
     if (!meal) return;
@@ -3020,6 +3175,7 @@ function qlLoadRecentMeal(idx) {
     document.getElementById('qlFat').value       = meal.fat      || '';
 }
 
+// Show recently logged runs in the run tab
 function renderQLRecentRuns() {
     const container = document.getElementById('qlRecentRuns');
     if (!container) return;
@@ -3063,6 +3219,7 @@ function renderQLRecentRuns() {
         </div>`;
 }
 
+// Switch between meal, strength, and run tabs
 function switchQLTab(tab, btn) {
     if (tab === 'strength') { qlSelectedMuscles = []; qlRenderMuscleChips(); }
     if (tab === 'meal') renderQLRecentMeals();
@@ -3076,6 +3233,9 @@ function switchQLTab(tab, btn) {
     document.querySelector('#quickLogOverlay .modal').style.minHeight = tab === 'strength' ? '520px' : '';
 }
 
+// ── QUICK LOG SAVE ─────────────────────────────────────────
+
+// Save the quick log form (meal, strength, or run)
 function saveQuickLog() {
     const targetDate = qlTargetDate || localDateStr();
     const isToday = targetDate === localDateStr();
@@ -3154,6 +3314,11 @@ function saveQuickLog() {
     document.getElementById('quickLogOverlay').classList.remove('open');
 }
 
+// ================================================================
+//  LOG VIEWS & OVERLAYS
+// ================================================================
+
+// Re-render the weekly or monthly view if it's open
 function refreshLogViews() {
     const overlay = document.getElementById('weeklyOverlay');
     if (!overlay || !overlay.classList.contains('open')) return;
@@ -3161,6 +3326,7 @@ function refreshLogViews() {
     if (isMonth) renderMonthlyView(); else renderWeeklyView();
 }
 
+// Switch between week and month views
 function switchLogTab(tab) {
     document.getElementById('tabWeek').classList.toggle('active', tab === 'week');
     document.getElementById('tabMonth').classList.toggle('active', tab === 'month');
@@ -3169,6 +3335,7 @@ function switchLogTab(tab) {
     if (tab === 'month') renderMonthlyView();
 }
 
+// Build and display the full monthly log grouped by month
 function renderMonthlyView() {
     // Build map: month → { dateStr → { workouts, note } }
     const monthMap = {};
@@ -3278,9 +3445,11 @@ document.getElementById('settingsOverlay').addEventListener('click', e => {
     }
 });
 
-// ─────────────────────────────────────────
-//  WELCOME
-// ─────────────────────────────────────────
+// ================================================================
+//  WELCOME MESSAGE
+// ================================================================
+
+// Show a greeting with streak count and today's program
 function addWelcome() {
     const h = new Date().getHours();
     const greet = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
@@ -3301,11 +3470,12 @@ function addWelcome() {
     }
 }
 
-// ─────────────────────────────────────────
-//  MIDNIGHT RESET — refresh todayLog when date changes
-// ─────────────────────────────────────────
+// ================================================================
+//  MIDNIGHT RESET
+// ================================================================
 let _activeDate = localDateStr();
 
+// Reset today's log when the date changes (midnight or tab switch)
 function checkDateRollover() {
     const now = localDateStr();
     if (now !== _activeDate) {
@@ -3327,9 +3497,9 @@ document.addEventListener('visibilitychange', () => {
 // Also check every 60 seconds as a fallback
 setInterval(checkDateRollover, 60000);
 
-// ─────────────────────────────────────────
+// ================================================================
 //  INIT
-// ─────────────────────────────────────────
+// ================================================================
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
