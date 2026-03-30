@@ -193,6 +193,8 @@ async function initApp() {
 let apiKey = 'proxy';
 let history = [];
 let todayLog = loadTodayLog();
+let isSending = false;        // Prevents duplicate requests from rapid tapping
+let isProcessingImage = false; // Prevents duplicate photo scans
 
 // ================================================================
 //  DATA & STORAGE
@@ -260,7 +262,12 @@ function loadTodayLog() {
 
 // Save today's log to localStorage and sync to cloud
 function saveLog() {
-    localStorage.setItem(todayKey(), JSON.stringify(todayLog));
+    try {
+        localStorage.setItem(todayKey(), JSON.stringify(todayLog));
+    } catch (e) {
+        alert('Storage is full — your data may not be saved. Try clearing old logs in the weekly view.');
+        console.warn('localStorage full:', e.message);
+    }
     renderSummary();
     renderMacroBar();
     syncToSupabase();
@@ -597,7 +604,7 @@ function deleteMealFromCard(mealIndex) {
     todayLog.meals.splice(mealIndex, 1);
     saveLog();
     renderMacroBar();
-    // Remove the card from chat and re-index remaining cards
+    // Remove the card from chat and re-index ALL meal cards (including those in edit mode)
     const allCards = document.querySelectorAll('.message.ai[data-meal-index]');
     allCards.forEach(c => {
         const i = parseInt(c.dataset.mealIndex);
@@ -606,8 +613,16 @@ function deleteMealFromCard(mealIndex) {
         } else if (i > mealIndex) {
             const newIdx = i - 1;
             c.dataset.mealIndex = newIdx;
+            // Update onclick for display cards
             const logCard = c.querySelector('.log-card');
             if (logCard) logCard.setAttribute('onclick', `editMealCard(this, ${newIdx})`);
+            // Update buttons in edit mode cards
+            const saveBtn = c.querySelector('[onclick*="saveMealEdit"]');
+            if (saveBtn) saveBtn.setAttribute('onclick', saveBtn.getAttribute('onclick').replace(/\d+\)$/, newIdx + ')'));
+            const deleteBtn = c.querySelector('[onclick*="deleteMealFromCard"]');
+            if (deleteBtn) deleteBtn.setAttribute('onclick', `deleteMealFromCard(${newIdx})`);
+            const cancelBtn = c.querySelector('[onclick*="cancelMealEdit"]');
+            if (cancelBtn) cancelBtn.setAttribute('onclick', cancelBtn.getAttribute('onclick').replace(/\d+\)$/, newIdx + ')'));
         }
     });
 }
@@ -1223,6 +1238,8 @@ document.addEventListener('click', () => {
 async function handleImageFile(e) {
     const file = e.target.files[0];
     if (!file) return;
+    if (isProcessingImage) return;
+    isProcessingImage = true;
 
     document.getElementById('cameraHint').style.display = 'none';
 
@@ -1315,7 +1332,8 @@ async function handleImageFile(e) {
         } finally {
             document.getElementById('sendBtn').disabled = false;
             document.getElementById('cameraInput').value = '';
-        document.getElementById('libraryInput').value = '';
+            document.getElementById('libraryInput').value = '';
+            isProcessingImage = false;
         }
     };
     reader.readAsDataURL(file);
@@ -1398,11 +1416,8 @@ async function lookupBarcode(barcode) {
             fat:      Math.round(n['fat_serving']          || n['fat_100g']          || 0)
         };
 
-        addBubble('ai', `Found **${name}** (per ${serving}) — ${logData.calories} cal, ${logData.protein}g protein, ${logData.carbs}g carbs, ${logData.fat}g fat. Logged!`);
-        todayLog.meals.push({ ...logData, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-        addMealCard(logData, todayLog.meals.length - 1);
-        saveLog();
-        renderMacroBar();
+        addBubble('ai', `Found **${name}** (per ${serving}). Review the numbers before logging:`);
+        showMealConfirm(logData);
 
     } catch (err) {
         hideTyping();
@@ -1543,12 +1558,14 @@ function saveNotes(dateStr, notes) {
         localStorage.removeItem(key);
         // Upsert empty array so Supabase doesn't restore the deleted note on next load
         (async () => {
-            const { data: { user } } = await _supabase.auth.getUser();
-            if (!user) return;
-            await _supabase.from('user_data').upsert(
-                [{ user_id: user.id, data_key: key, data_value: '[]', updated_at: new Date().toISOString() }],
-                { onConflict: 'user_id,data_key' }
-            );
+            try {
+                const { data: { user } } = await _supabase.auth.getUser();
+                if (!user) return;
+                await _supabase.from('user_data').upsert(
+                    [{ user_id: user.id, data_key: key, data_value: '[]', updated_at: new Date().toISOString() }],
+                    { onConflict: 'user_id,data_key' }
+                );
+            } catch (e) { console.warn('FitTrack+ note sync failed:', e.message); }
         })();
     }
 }
@@ -1977,6 +1994,9 @@ async function askClaude(userMessage) {
         });
         clearTimeout(chatTimeout);
 
+        let logData = null;
+        let displayText = '';
+
         if (!res.ok) {
             const e = await res.json().catch(() => ({}));
             // Retry without JSON mode if generation failed
@@ -1994,37 +2014,41 @@ async function askClaude(userMessage) {
                 const retryData = await retryRes.json();
                 const retryText = retryData.choices?.[0]?.message?.content || '';
                 hideTyping();
-                if (retryText) addBubble('ai', retryText);
                 history.push({ role: 'assistant', content: retryText });
-                document.getElementById('sendBtn').disabled = false;
-                return;
+                // Try to parse JSON from retry so log actions aren't lost
+                try {
+                    const retryParsed = JSON.parse(retryText);
+                    displayText = retryParsed.message || retryText;
+                    logData = retryParsed.log || null;
+                } catch (_) {
+                    displayText = retryText;
+                }
+                if (displayText) addBubble('ai', displayText);
+            } else {
+                throw new Error(e.error?.message || `HTTP ${res.status}`);
             }
-            throw new Error(e.error?.message || `HTTP ${res.status}`);
+        } else {
+            const data = await res.json();
+            if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                throw new Error(data.error?.message || 'AI did not respond. Please try again.');
+            }
+            const fullText = data.choices[0].message.content;
+            history.push({ role: 'assistant', content: fullText });
+
+            hideTyping();
+
+            // ── PROCESS RESPONSE — parse the JSON and extract message + log data ──
+            try {
+                const parsed = JSON.parse(fullText);
+                displayText = parsed.message || '';
+                logData = parsed.log || null;
+            } catch (_) {
+                // fallback: show raw text if JSON parsing fails
+                displayText = fullText;
+            }
+
+            if (displayText) addBubble('ai', displayText);
         }
-
-        const data = await res.json();
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-            throw new Error(data.error?.message || 'AI did not respond. Please try again.');
-        }
-        const fullText = data.choices[0].message.content;
-        history.push({ role: 'assistant', content: fullText });
-
-        hideTyping();
-
-        // ── PROCESS RESPONSE — parse the JSON and extract message + log data ──
-        let logData = null;
-        let displayText = fullText;
-
-        try {
-            const parsed = JSON.parse(fullText);
-            displayText = parsed.message || '';
-            logData = parsed.log || null;
-        } catch (_) {
-            // fallback: show raw text if JSON parsing fails
-            displayText = fullText;
-        }
-
-        if (displayText) addBubble('ai', displayText);
 
         // If log is an array (e.g. move = copy + delete), process each item
         if (Array.isArray(logData)) {
@@ -2422,16 +2446,22 @@ async function askClaude(userMessage) {
 
 // Read user input and send it to the AI
 async function send() {
+    if (isSending) return;
     const input = document.getElementById('textInput');
     const text = input.value.trim();
     if (!text) return;
     if (!apiKey) return;
 
+    isSending = true;
     input.value = '';
     input.style.height = 'auto';
     addBubble('user', text);
 
-    await askClaude(text);
+    try {
+        await askClaude(text);
+    } finally {
+        isSending = false;
+    }
 }
 
 // Send a suggestion chip's text as if the user typed it
@@ -2921,7 +2951,12 @@ function loadLogForDate(dateStr) {
 
 // Save a day's log from the quick log form
 function saveLogForDate(dateStr, log) {
-    localStorage.setItem('fittrack_' + dateStr, JSON.stringify(log));
+    try {
+        localStorage.setItem('fittrack_' + dateStr, JSON.stringify(log));
+    } catch (e) {
+        alert('Storage is full — your data may not be saved. Try clearing old logs in the weekly view.');
+        console.warn('localStorage full:', e.message);
+    }
     if (dateStr === localDateStr()) {
         todayLog = log;
         renderSummary();
@@ -2989,6 +3024,11 @@ function deleteLogItem(dateStr, type, index) {
     if (type === 'meal') log.meals.splice(index, 1);
     else log.workouts.splice(index, 1);
     saveLogForDate(dateStr, log);
+    // Invalidate quick log edit mode if it was pointing at this item (stale index protection)
+    if (qlEditMode && qlEditMode.dateStr === dateStr && qlEditMode.type === type) {
+        qlEditMode = null;
+        document.getElementById('quickLogOverlay').classList.remove('open');
+    }
 }
 
 document.getElementById('quickLogBtn').addEventListener('click', () => {
